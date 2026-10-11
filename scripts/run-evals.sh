@@ -11,6 +11,7 @@ mkdir -p "$OUT"
 
 claude plugin eval "$ROOT/plugin" \
   --trust-plugin --scaffold --no-publish --threshold 1 \
+  --allow-tools Bash \
   --json "$OUT/last-run.json" "$@"
 
 jq -e '.aggregates.meanDelta > 0' "$OUT/last-run.json" >/dev/null || {
