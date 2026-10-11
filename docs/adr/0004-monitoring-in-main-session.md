@@ -1,0 +1,3 @@
+# Monitoring runs in the main session, not a subagent
+
+Watching a CI run, deploy or long job is a skill (`run-monitor`, also used by `ship-and-land`) that polls from the main session on an interval and posts status there, because a background subagent cannot speak to the operator until it finishes and the Standards require unprompted status updates during long runs. When a run fails, the skill delegates the log digging to a subagent so raw logs stay out of the main context. We rejected a monitoring subagent with push notifications (status lands outside the conversation) and a quiet subagent with only a final report (breaks the proactive-status Standard).

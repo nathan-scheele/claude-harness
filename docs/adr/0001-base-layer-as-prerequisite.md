@@ -1,0 +1,3 @@
+# Matt Pocock's skills are a prerequisite, not vendored
+
+The Harness requires the `mattpocock-skills` plugin to be installed and calls its skills (`implement`, `code-review`, `grilling`, …) by name, with a graceful fallback when one is missing. We rejected vendoring a pinned copy because a vendored snapshot drifted silently in practice (a project-level copy shadowed the newer plugin with older skill text), and rejected forking because the Base layer's own flow is the backbone of daily use. The Harness also reuses the Base layer's per-repo `docs/agents/*.md` convention for Project config instead of inventing its own. The Harness tracks the Base layer's main branch rather than a pinned release, so calls must tolerate skills being added, renamed or removed upstream.

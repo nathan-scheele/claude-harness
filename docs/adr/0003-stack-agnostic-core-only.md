@@ -1,0 +1,3 @@
+# The Harness is a stack-agnostic core with no domain packs
+
+The Harness ships only skills and subagents that work in any repo; there is no Shopify (or other platform) pack, public or private. A public Shopify pack was rejected because its value lies in store-specific gotchas that would leak store facts (domains, theme IDs, resource IDs, plan limits) with every edit, go stale with monthly platform changes, add little over the vendor's own AI toolkit, and force a scrubbed public copy alongside the useful private one. Platform knowledge stays as Project-local items in the repos that need it; anything platform-shaped in the Harness must be reached through Project config.
