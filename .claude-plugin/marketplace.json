@@ -1,0 +1,24 @@
+{
+  "name": "harness",
+  "owner": {
+    "name": "Nathan Scheele",
+    "url": "https://github.com/nathan-scheele"
+  },
+  "description": "The Harness: a Claude Code plugin of stack-agnostic skills and subagents.",
+  "plugins": [
+    {
+      "name": "harness",
+      "source": "./plugin",
+      "description": "Stack-agnostic skills and subagents for shipping, Live writes, monitoring and verification, layered on Matt Pocock's skills.",
+      "category": "engineering",
+      "keywords": [
+        "engineering",
+        "skills",
+        "subagents",
+        "shipping",
+        "verification",
+        "standards"
+      ]
+    }
+  ]
+}

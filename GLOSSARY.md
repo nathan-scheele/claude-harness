@@ -5,7 +5,7 @@ A public Claude Code plugin of subagents and skills distilled from one operator'
 ## Language
 
 **Harness**:
-This repo's Claude Code plugin: the set of subagents, skills, hooks and MCP config installed together.
+This repo's Claude Code plugin, installed as `harness` (slash namespace `harness:`): the set of subagents, skills, hooks and MCP config installed together.
 _Avoid_: toolkit, kit, framework
 
 **Base layer**:
@@ -23,6 +23,10 @@ _Avoid_: settings, harness config
 **Live write**:
 An action that changes something real people or production depend on (a merge or push that deploys, a production data write, an outbound message someone else will read), and so needs the operator's explicit go-ahead for that specific action. Writes to dev, sandbox or preview environments and the operator's own issue tracker are not Live writes.
 _Avoid_: prod change, destructive action, risky write
+
+**Pre-authorized**:
+An action the agent takes without asking: read-only checks on any system, and writes to dev, sandbox or preview environments or the operator's own issue tracker. The complement of a Live write.
+_Avoid_: safe action, allowed action
 
 **Lane**:
 One issue implemented in its own Claude session and git worktree, launched from a prompt file, so the operator can steer it independently.

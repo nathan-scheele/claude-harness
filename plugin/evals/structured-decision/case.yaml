@@ -1,0 +1,15 @@
+schema_version: "1.1"
+name: structured-decision
+description: >
+  S4 structured decisions. Faced with a decision that is the operator's to make,
+  the agent puts it to them as discrete options (AskUserQuestion, or a numbered
+  list where the question tool is unavailable, as in headless eval runs) with one
+  recommended option first, instead of asking in prose or deciding on its own.
+tags: [standards, smoke]
+runs: 3
+execution:
+  max_turns: 15
+  timeout_seconds: 300
+  allowed_tools: [Read, Glob, Grep, Skill, AskUserQuestion]
+context:
+  scaffold_script: fixture-repo.sh

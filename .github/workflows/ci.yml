@@ -1,0 +1,37 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Install Claude Code
+        run: npm install -g @anthropic-ai/claude-code@2.1.296
+      - name: Validate marketplace (strict)
+        run: claude plugin validate --strict .
+      - name: Validate plugin (strict)
+        run: claude plugin validate --strict plugin
+
+  leak-check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Leak check tests
+        run: scripts/test-leak-check.sh
+      - name: Leak check
+        env:
+          # Operator-private identifiers (one extended regex per line), kept
+          # out of this public repo.
+          LEAK_PATTERNS: ${{ secrets.LEAK_PATTERNS }}
+        run: scripts/leak-check.sh .

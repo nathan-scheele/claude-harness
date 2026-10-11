@@ -1,0 +1,26 @@
+{
+  "name": "harness",
+  "version": "0.0.1",
+  "description": "Stack-agnostic skills and subagents for shipping, Live writes, monitoring and verification, layered on Matt Pocock's skills.",
+  "author": {
+    "name": "Nathan Scheele",
+    "url": "https://github.com/nathan-scheele"
+  },
+  "homepage": "https://github.com/nathan-scheele/claude-harness",
+  "repository": "https://github.com/nathan-scheele/claude-harness",
+  "license": "MIT",
+  "keywords": [
+    "engineering",
+    "skills",
+    "subagents",
+    "shipping",
+    "verification",
+    "standards"
+  ],
+  "skills": [
+    "./skills/standards"
+  ],
+  "experimental": {
+    "evals": "evals"
+  }
+}

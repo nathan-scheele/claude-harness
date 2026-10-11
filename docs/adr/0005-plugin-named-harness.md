@@ -1,0 +1,3 @@
+# The plugin is named `harness`, not `claude-harness`
+
+The spec named the plugin `claude-harness` (namespace `claude-harness:`), but `claude plugin validate` rejects any third-party plugin name starting with `claude-` as reserved for Anthropic, so the plugin is `harness` (namespace `harness:`, installed as `harness@harness`) while the repo keeps the name claude-harness. The plugin lives in `plugin/` with the marketplace manifest at the repo root, because a CLAUDE.md at the plugin root is a strict-validation warning and the repo needs its own CLAUDE.md for agents working on it. We rejected `operator-harness` and `ops-harness` as longer without being clearer; `harness` matches the glossary term.
