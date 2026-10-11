@@ -87,6 +87,34 @@ d="$(new_repo)"
 printf 'Clone %s@%s:owner/repo.git\n' git github.com > "$d/notes.md"
 expect pass "git SSH remote is not an email" "$d"
 
+d="$(new_repo)"
+printf 'Editor: https://admin.example.com/%s/%s/editor\n' themes 141234567890 > "$d/notes.md"
+expect fail "theme ID in a themes/ path fails" "$d"
+
+d="$(new_repo)"
+printf 'Preview with ?preview_theme_%s=%s\n' id 141234567890 > "$d/notes.md"
+expect fail "theme ID in a theme_id parameter fails" "$d"
+
+d="$(new_repo)"
+printf 'Read the theme ID from Project config; edit themes/<id>/editor.\n' > "$d/notes.md"
+expect pass "theme ID placeholder passes" "$d"
+
+d="$(new_repo)"
+printf 'Helpdesk at https://%s.%s\n' acme gorgias.com > "$d/notes.md"
+expect fail "helpdesk account subdomain fails" "$d"
+
+d="$(new_repo)"
+printf 'Workspace https://%s.%s/archives\n' acme-team slack.com > "$d/notes.md"
+expect fail "chat workspace subdomain fails" "$d"
+
+d="$(new_repo)"
+printf 'Create an app at https://%s.%s/apps\n' api slack.com > "$d/notes.md"
+expect pass "vendor public host passes" "$d"
+
+d="$(new_repo)"
+printf 'Post to channel %s%s as user %s%s\n' C0 7ABCDE123 U0 5FGHIJ456 > "$d/notes.md"
+expect fail "chat channel and user IDs fail" "$d"
+
 if [[ $failures -gt 0 ]]; then
   echo "$failures test(s) failed"
   exit 1

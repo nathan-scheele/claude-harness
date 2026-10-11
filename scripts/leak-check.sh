@@ -13,19 +13,20 @@ set -euo pipefail
 ROOT="${1:-.}"
 cd "$ROOT"
 
-# label<TAB>extended regex
-PATTERNS=$(cat <<'EOF'
-email	[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}
+# label<TAB>extended regex[<TAB>allow regex]
+# A match is ignored when it also matches the allow regex: things public by
+# design, like example.com emails or a vendor's own API host.
+read -r -d '' PATTERNS <<'EOF' || true  # read -d '' exits 1 at end of input
+email	[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}	@(example\.(com|org|net)|anthropic\.com|users\.noreply\.github\.com)$|^git@github\.com$
 home path	/(Users|home)/[A-Za-z0-9._-]+/
 store domain	[A-Za-z0-9-]+\.myshopify\.com
 store admin URL	admin\.shopify\.com/store/[A-Za-z0-9-]+
+theme ID	(themes/|theme_?[Ii][Dd]["']?[=: ]+["']?)[0-9]{6,}
+account subdomain	[A-Za-z0-9-]+\.(gorgias|slack)\.com	^(api|app|hooks|files|docs|developers|status|help|www)\.
+chat ID	\b[CUGDW]0[A-Z0-9]{8,10}\b
 resource ID	gid://[A-Za-z]+/[A-Za-z]+/[0-9]+
 resource ID	\b(app|tbl|fld|viw|rec|sel|wsp)[A-Za-z0-9]{14}\b
 EOF
-)
-
-# Emails that are public by design.
-EMAIL_ALLOW='@(example\.(com|org|net)|anthropic\.com|users\.noreply\.github\.com)$|^git@github\.com$'
 
 if [[ -n "${LEAK_PATTERNS:-}" ]]; then
   while IFS= read -r p; do
@@ -44,7 +45,7 @@ if [[ ${#files[@]} -eq 0 ]]; then
 fi
 
 found=0
-while IFS=$'\t' read -r label regex; do
+while IFS=$'\t' read -r label regex allow; do
   # grep exits 1 for no match and 2+ for a bad regex; a bad regex must not pass as clean.
   status=0
   hits="$(grep -nIE -- "$regex" "${files[@]}" /dev/null)" || status=$?
@@ -54,8 +55,8 @@ while IFS=$'\t' read -r label regex; do
   fi
   while IFS= read -r hit; do
     [[ -z "$hit" ]] && continue
-    if [[ "$label" == email ]]; then
-      match="$(grep -oE "$regex" <<< "${hit#*:*:}" | grep -vE "$EMAIL_ALLOW" || true)"
+    if [[ -n "$allow" ]]; then
+      match="$(grep -oE "$regex" <<< "${hit#*:*:}" | grep -vE "$allow" || true)"
       [[ -z "$match" ]] && continue
     fi
     if [[ "$label" == "private pattern" ]]; then

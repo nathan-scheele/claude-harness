@@ -44,7 +44,7 @@ Layout: the marketplace manifest is at `.claude-plugin/marketplace.json`; the pl
 claude plugin validate --strict .        # marketplace
 claude plugin validate --strict plugin   # plugin
 scripts/test-leak-check.sh               # leak-check tests
-scripts/leak-check.sh .                  # fail on emails, home paths, store domains, resource IDs
+scripts/leak-check.sh .                  # fail on emails, home paths, store domains, theme IDs, account subdomains, chat and resource IDs
 scripts/run-evals.sh                     # behavioural evals vs a no-plugin baseline (uses your Claude credentials)
 ```
 
