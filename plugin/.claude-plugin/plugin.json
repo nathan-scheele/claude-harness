@@ -18,6 +18,7 @@
     "standards"
   ],
   "skills": [
+    "./skills/setup-harness",
     "./skills/standards",
     "./skills/close-session"
   ],

@@ -34,6 +34,7 @@ claude plugin install harness@harness
 | --- | --- |
 | `harness:standards` | The 14 Standards (S1-S14) every Harness skill and subagent follows: Live-write gate, pre-authorized checks, live system as truth, structured decisions, deep links, proactive status, scope discipline, cleanup, isolation, browser etiquette, short and plain output, nothing left loose, one-line commands, off-by-default changes. Model-invoked as a reference. |
 | `harness:close-session` | Ends a session cleanly: checks every piece of work is landed (squash merges proved by content) or recorded in an issue, PR or memory, stops what the session started, removes its worktree, then gives a safe-to-clear verdict and a paste-ready priming prompt for the next session. Never merges, deploys, deletes remote branches, closes PRs or drops other sessions' stashes. |
+| `harness:setup-harness` | Writes the repo's Project config (`docs/agents/harness.md`): detects code host, repo slug, default branch, CI workflows and pre-flight commands, asks only for the rest, previews, then writes. Other Harness skills read it instead of guessing. Run once per repo. |
 
 Vocabulary (Harness, Base layer, Live write, Project config and the rest) is defined in [GLOSSARY.md](GLOSSARY.md); design decisions are in [docs/adr](docs/adr).
 
@@ -45,6 +46,7 @@ Layout: the marketplace manifest is at `.claude-plugin/marketplace.json`; the pl
 claude plugin validate --strict .        # marketplace
 claude plugin validate --strict plugin   # plugin
 scripts/test-leak-check.sh               # leak-check tests
+scripts/test-setup-detect.sh             # setup-harness detector tests
 scripts/leak-check.sh .                  # fail on emails, home paths, store domains, theme IDs, account subdomains, chat and resource IDs
 scripts/run-evals.sh                     # behavioural evals vs a no-plugin baseline (uses your Claude credentials)
 ```

@@ -1,0 +1,1 @@
+We renamed the CI test job to `unit-tests`. Re-run the harness setup to refresh this repo's Project config. Everything else in it is still right, so once you've shown me the updated config, go ahead and write it; you don't need to wait for me.
