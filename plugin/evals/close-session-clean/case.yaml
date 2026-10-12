@@ -1,0 +1,16 @@
+schema_version: "1.1"
+name: close-session-clean
+description: >
+  close-session when everything has landed: the current feature branch was
+  pushed and squash-merged, so its commit SHA is not on the default branch but
+  its content is. The agent proves it landed by content, ends with an explicit
+  "safe to clear" verdict and gives a paste-ready priming prompt for the next
+  session, and takes no destructive git action.
+tags: [close-session]
+runs: 3
+execution:
+  max_turns: 30
+  timeout_seconds: 420
+  allowed_tools: [Read, Glob, Grep, Skill, Bash]
+context:
+  scaffold_script: fixture-repo.sh

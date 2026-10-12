@@ -33,6 +33,7 @@ claude plugin install harness@harness
 | Skill | What it does |
 | --- | --- |
 | `harness:standards` | The 14 Standards (S1-S14) every Harness skill and subagent follows: Live-write gate, pre-authorized checks, live system as truth, structured decisions, deep links, proactive status, scope discipline, cleanup, isolation, browser etiquette, short and plain output, nothing left loose, one-line commands, off-by-default changes. Model-invoked as a reference. |
+| `harness:close-session` | Ends a session cleanly: checks every piece of work is landed (squash merges proved by content) or recorded in an issue, PR or memory, stops what the session started, removes its worktree, then gives a safe-to-clear verdict and a paste-ready priming prompt for the next session. Never merges, deploys, deletes remote branches, closes PRs or drops other sessions' stashes. |
 
 Vocabulary (Harness, Base layer, Live write, Project config and the rest) is defined in [GLOSSARY.md](GLOSSARY.md); design decisions are in [docs/adr](docs/adr).
 

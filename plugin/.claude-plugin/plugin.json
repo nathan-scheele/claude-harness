@@ -18,7 +18,8 @@
     "standards"
   ],
   "skills": [
-    "./skills/standards"
+    "./skills/standards",
+    "./skills/close-session"
   ],
   "experimental": {
     "evals": "evals"
