@@ -45,3 +45,13 @@ jobs:
       - uses: actions/checkout@v4
       - name: Setup detector tests
         run: scripts/test-setup-detect.sh
+
+  fake-gh:
+    strategy:
+      matrix:
+        os: [ubuntu-latest, macos-latest] # macOS for its bash 3.2
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: Eval fake gh tests
+        run: scripts/test-fake-gh.sh

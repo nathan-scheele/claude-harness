@@ -21,7 +21,8 @@
     "./skills/setup-harness",
     "./skills/standards",
     "./skills/close-session",
-    "./skills/gated-write"
+    "./skills/gated-write",
+    "./skills/run-monitor"
   ],
   "experimental": {
     "evals": "evals"
