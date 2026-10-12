@@ -28,6 +28,19 @@ claude plugin marketplace add nathan-scheele/claude-harness
 claude plugin install harness@harness
 ```
 
+### 3. Sign in to the Harness browser (once)
+
+The Harness ships its own browser server, the Harness browser: [chrome-devtools-mcp](https://github.com/ChromeDevTools/chrome-devtools-mcp) 1.10.1 running Chrome with a dedicated, persistent profile kept in the plugin's data directory (under `~/.claude/plugins/data/`). It is separate from your everyday Chrome, survives plugin updates and is deleted when you uninstall the plugin. It needs Node.js and Chrome.
+
+Sign it in to the accounts verification needs (your app's dev and live sites, vendor dashboards) once:
+
+1. In a Claude Code session with the Harness installed, ask: "Open https://dev.example.com/login in the Harness browser" (with your own sign-in URL).
+2. Sign in in the Chrome window that opens. Repeat for each account.
+
+Sign-ins persist in the profile. If one expires, `harness:live-verifier` lists signing in again as a step for you instead of failing the check.
+
+Subagents open pages in the background, so the browser doesn't take your focus once it's running (Chrome shows its own window the first time a session uses it). The profile can be open in only one Chrome at a time: if another session is already using the Harness browser, live-verifier reports it as blocked rather than taking that browser over.
+
 ## What's in it
 
 | Skill | What it does |
@@ -37,6 +50,7 @@ claude plugin install harness@harness
 | `harness:setup-harness` | Writes the repo's Project config (`docs/agents/harness.md`): detects code host, repo slug, default branch, CI workflows and pre-flight commands, asks only for the rest, previews, then writes. Other Harness skills read it instead of guessing. Run once per repo. |
 | `harness:gated-write` | Runs a production data write through the Live-write procedure: read-only fact pass, change table posted to chat and the issue, a stop for explicit approval, dry run, canary of 1-3 records, operator spot-check, full run with progress, re-check against the live system, and a rollback ledger (CSV of before/after values) posted on the issue. Reads data connectors and dev/sandbox targets from Project config; dev and sandbox writes skip the gate. |
 | `harness:run-monitor` | Watches a CI run, deploy or long job from the main session: polls at an interval you set and posts a status line each time, checks the outcome against what was expected (jobs listed in Project config, counts, side effects) before calling it done, and on failure has a subagent find the first failing step and say whether it's a real defect or a reporting artifact. Reads only: it offers to file an issue for a real defect and files one only on your yes. |
+| `harness:live-verifier` (subagent) | Checks a change on a dev or live target (from the Project config) against the acceptance criteria of an issue or PR, in the Harness browser and with read-only API calls, and returns a pass/fail table you can turn into a punchlist. Sets up and resets fixtures on dev targets only, lists the steps only you can do (a sign-in) and waits for them. Read-only by construction: no file-editing tools, and a hook limits its Bash to reads. |
 
 Vocabulary (Harness, Base layer, Live write, Project config and the rest) is defined in [GLOSSARY.md](GLOSSARY.md); design decisions are in [docs/adr](docs/adr).
 
@@ -50,13 +64,14 @@ claude plugin validate --strict plugin   # plugin
 scripts/test-leak-check.sh               # leak-check tests
 scripts/test-setup-detect.sh             # setup-harness detector tests
 scripts/test-fake-gh.sh                  # fake gh used by eval fixtures (plugin/evals/fakes)
+scripts/test-live-verifier-guard.sh      # live-verifier read-only Bash hook tests (needs node)
 scripts/leak-check.sh .                  # fail on emails, home paths, store domains, theme IDs, account subdomains, chat and resource IDs
 scripts/run-evals.sh                     # behavioural evals vs a no-plugin baseline (uses your Claude credentials)
 ```
 
 CI runs strict validation and the leak check on every push and PR. Private identifiers the leak check must catch but this public repo must not contain (a work domain, a store name) go in the `LEAK_PATTERNS` repository secret, one extended regex per line.
 
-Evals live in `plugin/evals/<case>/`. Each case builds a fixture repo with its scaffold script and runs once with the plugin and once without; `run-evals.sh` fails unless every case passes and the plugin beats the baseline. Eval runs are headless, so the structured question tool (AskUserQuestion) isn't available in them; cases assert the Standards' headless fallback instead. Fixture builders shared by several cases live in `plugin/evals/fixtures/`; external systems are fakes inside the fixture that log their calls (the gated-write cases' `bin/notes-db` data connector), so graders check what was actually called and in what order. Stand-ins for CLIs several skills use live in `plugin/evals/fakes/` (a fake `gh` that replays canned CI, PR and issue states and records every call); fixtures install them, as its README describes.
+Evals live in `plugin/evals/<case>/`. Each case builds a fixture repo with its scaffold script and runs once with the plugin and once without; `run-evals.sh` fails unless every case passes and the plugin beats the baseline. Eval runs are headless, so the structured question tool (AskUserQuestion) isn't available in them; cases assert the Standards' headless fallback instead. Fixture builders shared by several cases live in `plugin/evals/fixtures/`; external systems are fakes inside the fixture that log their calls (the gated-write cases' `bin/notes-db` data connector), so graders check what was actually called and in what order. Stand-ins for CLIs several skills use live in `plugin/evals/fakes/` (a fake `gh` that replays canned CI, PR and issue states and records every call); fixtures install them, as its README describes. Plugin MCP servers never start in eval runs; cases answer their tools from mocks in `<case>/mocks/<server>/` (the live-verifier cases mock the Harness browser as `browser/`).
 
 ## Credits
 

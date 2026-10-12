@@ -36,6 +36,16 @@ jobs:
           LEAK_PATTERNS: ${{ secrets.LEAK_PATTERNS }}
         run: scripts/leak-check.sh .
 
+  live-verifier-guard:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: live-verifier Bash guard tests
+        run: scripts/test-live-verifier-guard.sh
+
   setup-detect:
     strategy:
       matrix:
