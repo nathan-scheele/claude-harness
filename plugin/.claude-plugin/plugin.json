@@ -20,7 +20,8 @@
   "skills": [
     "./skills/setup-harness",
     "./skills/standards",
-    "./skills/close-session"
+    "./skills/close-session",
+    "./skills/gated-write"
   ],
   "experimental": {
     "evals": "evals"

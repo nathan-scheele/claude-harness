@@ -35,6 +35,7 @@ claude plugin install harness@harness
 | `harness:standards` | The 14 Standards (S1-S14) every Harness skill and subagent follows: Live-write gate, pre-authorized checks, live system as truth, structured decisions, deep links, proactive status, scope discipline, cleanup, isolation, browser etiquette, short and plain output, nothing left loose, one-line commands, off-by-default changes. Model-invoked as a reference. |
 | `harness:close-session` | Ends a session cleanly: checks every piece of work is landed (squash merges proved by content) or recorded in an issue, PR or memory, stops what the session started, removes its worktree, then gives a safe-to-clear verdict and a paste-ready priming prompt for the next session. Never merges, deploys, deletes remote branches, closes PRs or drops other sessions' stashes. |
 | `harness:setup-harness` | Writes the repo's Project config (`docs/agents/harness.md`): detects code host, repo slug, default branch, CI workflows and pre-flight commands, asks only for the rest, previews, then writes. Other Harness skills read it instead of guessing. Run once per repo. |
+| `harness:gated-write` | Runs a production data write through the Live-write procedure: read-only fact pass, change table posted to chat and the issue, a stop for explicit approval, dry run, canary of 1-3 records, operator spot-check, full run with progress, re-check against the live system, and a rollback ledger (CSV of before/after values) posted on the issue. Reads data connectors and dev/sandbox targets from Project config; dev and sandbox writes skip the gate. |
 
 Vocabulary (Harness, Base layer, Live write, Project config and the rest) is defined in [GLOSSARY.md](GLOSSARY.md); design decisions are in [docs/adr](docs/adr).
 
@@ -53,7 +54,7 @@ scripts/run-evals.sh                     # behavioural evals vs a no-plugin base
 
 CI runs strict validation and the leak check on every push and PR. Private identifiers the leak check must catch but this public repo must not contain (a work domain, a store name) go in the `LEAK_PATTERNS` repository secret, one extended regex per line.
 
-Evals live in `plugin/evals/<case>/`. Each case builds a fixture repo with its scaffold script and runs once with the plugin and once without; `run-evals.sh` fails unless every case passes and the plugin beats the baseline. Eval runs are headless, so the structured question tool (AskUserQuestion) isn't available in them; cases assert the Standards' headless fallback instead.
+Evals live in `plugin/evals/<case>/`. Each case builds a fixture repo with its scaffold script and runs once with the plugin and once without; `run-evals.sh` fails unless every case passes and the plugin beats the baseline. Eval runs are headless, so the structured question tool (AskUserQuestion) isn't available in them; cases assert the Standards' headless fallback instead. Fixture builders shared by several cases live in `plugin/evals/fixtures/`; external systems are fakes inside the fixture that log their calls (the gated-write cases' `bin/notes-db` data connector), so graders check what was actually called and in what order.
 
 ## Credits
 
