@@ -24,6 +24,19 @@
     "./skills/gated-write",
     "./skills/run-monitor"
   ],
+  "agents": [
+    "./agents/live-verifier.md"
+  ],
+  "mcpServers": {
+    "browser": {
+      "command": "npx",
+      "args": [
+        "-y",
+        "chrome-devtools-mcp@1.10.1",
+        "--user-data-dir=${CLAUDE_PLUGIN_DATA}/browser-profile"
+      ]
+    }
+  },
   "experimental": {
     "evals": "evals"
   }
