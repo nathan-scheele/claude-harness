@@ -39,7 +39,7 @@ Sign it in to the accounts verification needs (your app's dev and live sites, ve
 
 Sign-ins persist in the profile. If one expires, `harness:live-verifier` lists signing in again as a step for you instead of failing the check.
 
-Subagents open pages in the background, so the browser doesn't take your focus once it's running (Chrome shows its own window the first time a session uses it). The profile can be open in only one Chrome at a time: if another session is already using the Harness browser, live-verifier reports it as blocked rather than taking that browser over.
+Pages always open in the background (a hook denies any other kind), so the browser doesn't take your focus once it's running (Chrome shows its own window the first time a session uses it). The profile can be open in only one Chrome at a time: if another session is already using the Harness browser, live-verifier reports it as blocked rather than taking that browser over.
 
 ## What's in it
 
@@ -64,7 +64,7 @@ claude plugin validate --strict plugin   # plugin
 scripts/test-leak-check.sh               # leak-check tests
 scripts/test-setup-detect.sh             # setup-harness detector tests
 scripts/test-fake-gh.sh                  # fake gh used by eval fixtures (plugin/evals/fakes)
-scripts/test-live-verifier-guard.sh      # live-verifier read-only Bash hook tests (needs node)
+scripts/test-guard.sh                    # hook tests: live-verifier read-only Bash, background pages (needs node)
 scripts/leak-check.sh .                  # fail on emails, home paths, store domains, theme IDs, account subdomains, chat and resource IDs
 scripts/run-evals.sh                     # behavioural evals vs a no-plugin baseline (uses your Claude credentials)
 ```

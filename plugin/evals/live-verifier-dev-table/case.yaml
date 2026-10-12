@@ -12,6 +12,6 @@ runs: 3
 execution:
   max_turns: 40
   timeout_seconds: 600
-  allowed_tools: [Read, Glob, Grep, Agent, Bash]
+  allowed_tools: [Read, Glob, Grep, Agent, Bash, Edit, Write]
 context:
   scaffold_script: fixture-repo.sh
