@@ -1,0 +1,335 @@
+#!/usr/bin/env bash
+# Stand-in GitHub CLI for Harness eval fixtures. Replays canned run, PR and
+# issue states from a scenario directory and records every call, so graders can
+# check what the agent ran. Time is faked by ticks: every status read (run
+# list, run view, pr checks) moves all runs one line down their timeline, so a
+# "long" run unfolds over successive polls without real waiting. Scenario format
+# and usage: README.md next to this file. Needs jq; bash 3.2 compatible.
+set -o pipefail
+
+DIR="${FAKE_GH_DIR:-$(cd "$(dirname "$0")/.." && pwd)}"
+mkdir -p "$DIR/state"
+printf '%s\n' "gh${*:+ $(printf '%s' "$*" | tr '\n' ' ')}" >> "$DIR/calls.log"
+
+SUPPORTED="run list, run view, run watch, pr view, pr checks, issue list, issue view, issue create, auth status, --version"
+
+die() {
+  echo "fake gh: $*" >&2
+  exit 1
+}
+
+command -v jq >/dev/null 2>&1 || die "needs jq on PATH"
+REPO="$(cat "$DIR/repo" 2>/dev/null || echo example-org/example-repo)"
+
+# --- argument parsing ---
+
+# parse <spec> <args...>: spec lists accepted flags, each "s/long" (a switch)
+# or "s/long=" (takes a value); s is the short letter, or - for none. Sets OPTS
+# (lines of "long<TAB>value") and POS1, the first positional argument.
+parse() {
+  local spec="$1" a val hasval item short long takes found
+  shift
+  OPTS=""
+  POS1=""
+  while [ $# -gt 0 ]; do
+    a="$1"
+    shift
+    val=""
+    hasval=0
+    case "$a" in
+      --*=*) val="${a#*=}"; a="${a%%=*}"; hasval=1 ;;
+      --*) ;;
+      -?*?) val="${a:2}"; a="${a:0:2}"; hasval=1 ;; # -L5
+      -?) ;;
+      *) [ -z "$POS1" ] && POS1="$a"; continue ;;
+    esac
+    found=""
+    for item in $spec; do
+      short="${item%%/*}"
+      long="${item#*/}"
+      takes=0
+      case "$long" in *=) takes=1; long="${long%=}" ;; esac
+      if [ "$a" = "--$long" ] || { [ "$short" != "-" ] && [ "$a" = "-$short" ]; }; then
+        found="$long"
+        break
+      fi
+    done
+    [ -n "$found" ] || die "unknown flag $a; this command takes: $(flag_list "$spec")"
+    [ "$takes" = 0 ] && [ "$hasval" = 1 ] && die "flag $a takes no value"
+    if [ "$takes" = 1 ] && [ "$hasval" = 0 ]; then
+      [ $# -gt 0 ] || die "flag $a needs a value"
+      val="$1"
+      shift
+    fi
+    OPTS="$OPTS$found	$(printf '%s' "$val" | tr '\n' ' ')
+"
+  done
+}
+
+# flag_list <spec>: the spec's flags as gh would spell them, for error messages.
+flag_list() {
+  local item long out=""
+  for item in $1; do
+    long="${item#*/}"
+    out="$out --${long%=}"
+  done
+  echo "${out# }"
+}
+
+opt() { printf '%s' "$OPTS" | awk -F'\t' -v k="$1" '$1 == k { v = $2 } END { print v }'; }
+has_opt() {
+  case "
+$OPTS" in *"
+$1	"*) return 0 ;; esac
+  return 1
+}
+
+# show <json> <jq filter for plain text>: prints the JSON as gh does for
+# --json fields [--jq expr], or as plain text without --json.
+show() {
+  if wants_json; then
+    emit <<<"$1"
+  else
+    jq -r "$2" <<<"$1"
+  fi
+}
+
+# emit: prints the JSON on stdin as gh does for --json fields [--jq expr].
+emit() {
+  local fields jq_expr sel
+  fields="$(opt json)"
+  jq_expr="$(opt jq)"
+  [ -n "$fields" ] || die "--json needs field names (and --jq needs --json)"
+  local re='^[A-Za-z]+(,[A-Za-z]+)*$'
+  [[ "$fields" =~ $re ]] || die "--json takes comma-separated field names"
+  sel="{$fields}"
+  if [ -n "$jq_expr" ]; then
+    jq -c "if type == \"array\" then map($sel) else $sel end" | jq -r "$jq_expr"
+  else
+    jq -c "if type == \"array\" then map($sel) else $sel end"
+  fi
+}
+
+wants_json() { has_opt json || has_opt jq; }
+
+reject() {
+  local f
+  for f in "$@"; do
+    has_opt "$f" && die "--$f is not supported in this sandbox"
+  done
+}
+
+# --- faked time ---
+
+tick() { cat "$DIR/state/tick" 2>/dev/null || echo 0; }
+advance() { echo $(($(tick) + 1)) > "$DIR/state/tick"; }
+timeline_len() { grep -c . "$DIR/runs/$1/timeline.jsonl"; }
+
+run_exists() { [ -f "$DIR/runs/$1/run.json" ] && [ -f "$DIR/runs/$1/timeline.jsonl" ]; }
+
+# run_json <id>: the run's static fields merged with its state at the current tick.
+run_json() {
+  local id="$1" t n
+  run_exists "$id" || die "could not find any workflow run with ID $id"
+  n="$(timeline_len "$id")"
+  [ "$n" -gt 0 ] || die "scenario error: runs/$id/timeline.jsonl is empty"
+  t="$(tick)"
+  [ "$t" -lt 1 ] && t=1
+  [ "$t" -gt "$n" ] && t="$n"
+  jq -c --argjson snap "$(grep . "$DIR/runs/$id/timeline.jsonl" | sed -n "${t}p")" \
+    '. * $snap | .conclusion = (.conclusion // "")' "$DIR/runs/$id/run.json"
+}
+
+run_ids() {
+  local d
+  for d in "$DIR"/runs/*/; do
+    [ -f "$d/run.json" ] && basename "$d"
+  done | sort -rn
+}
+
+# jq filter for a run as plain text, as `gh run view` prints it.
+RUN_TEXT='def icon: if .status != "completed" then (if .status == "in_progress" then "*" else "-" end)
+  elif .conclusion == "success" then "✓" elif .conclusion == "skipped" then "-" else "X" end;
+    "\(icon) \(.headBranch) \(.workflowName) · \(.databaseId)",
+    "Triggered via \(.event)",
+    "Status: \(.status)\(if .conclusion != "" then " (" + .conclusion + ")" else "" end)",
+    "",
+    "JOBS",
+    (.jobs[]? | "\(icon) \(.name) (ID \(.databaseId))",
+      (if .conclusion == "failure" then (.steps[]? | select(.conclusion == "failure") | "  X \(.name)") else empty end)),
+    "",
+    "View this run on GitHub: \(.url)"'
+
+# --- commands ---
+
+cmd_run_list() {
+  parse "R/repo= q/jq= -/json= w/workflow= b/branch= c/commit= L/limit= s/status= e/event= u/user= -/created= a/all" "$@"
+  advance
+  local id runs
+  runs="$(for id in $(run_ids); do run_json "$id" || exit 1; done | jq -sc \
+    --arg wf "$(opt workflow)" --arg br "$(opt branch)" --arg c "$(opt commit)" \
+    --arg st "$(opt status)" --arg ev "$(opt event)" --arg lim "$(opt limit)" '
+    map(select(($wf == "" or .workflowName == $wf or (.path // "") == $wf or ((.path // "") | endswith("/" + $wf)))
+      and ($br == "" or .headBranch == $br) and ($c == "" or .headSha == $c)
+      and ($st == "" or .status == $st or .conclusion == $st) and ($ev == "" or .event == $ev)))
+    | .[:(if $lim == "" then 20 else ($lim | tonumber) end)]')" || exit 1
+  show "$runs" '.[] | [.status, .conclusion, .displayTitle, .workflowName, .headBranch, .event, (.databaseId | tostring)] | @tsv'
+}
+
+# log_for <id> <file>: prints a canned log once the run has completed.
+log_for() {
+  local id="$1" file="$2" status
+  status="$(run_json "$id" | jq -r .status)" || exit 1
+  [ "$status" = completed ] || die "run $id is still in progress; logs will be available when it is complete"
+  [ -f "$DIR/runs/$id/$file" ] || die "no logs found for run $id"
+  cat "$DIR/runs/$id/$file"
+}
+
+cmd_run_view() {
+  parse "R/repo= q/jq= -/json= t/template= j/job= a/attempt= -/log -/log-failed v/verbose -/exit-status w/web" "$@"
+  reject template web
+  local id="$POS1" job run file
+  file=""
+  has_opt log && file=log.txt
+  has_opt log-failed && file=log-failed.txt
+  job="$(opt job)"
+  if [ -n "$job" ]; then
+    [ -n "$file" ] || die "--job is only supported with --log or --log-failed"
+    for run in $(run_ids); do
+      if run_json "$run" | jq -e --arg j "$job" 'any(.jobs[]?; (.databaseId | tostring) == $j)' >/dev/null; then
+        id="$run"
+      fi
+    done
+    [ -n "$id" ] || die "could not find job $job"
+    # A job's own canned log if there is one, else the run-level log.
+    if [ "$file" = log.txt ] && [ -f "$DIR/runs/$id/jobs/$job.log" ]; then
+      file="jobs/$job.log"
+    elif [ "$file" = log-failed.txt ] && [ -f "$DIR/runs/$id/jobs/$job.failed.log" ]; then
+      file="jobs/$job.failed.log"
+    fi
+  fi
+  [ -n "$id" ] || die "run ID required"
+  if [ -n "$file" ]; then
+    log_for "$id" "$file"
+    return
+  fi
+  advance
+  local j
+  j="$(run_json "$id")" || exit 1
+  show "$j" "$RUN_TEXT"
+  if has_opt exit-status; then
+    jq -e '.status != "completed" or .conclusion == "success"' <<<"$j" >/dev/null || exit 1
+  fi
+}
+
+cmd_run_watch() {
+  parse "R/repo= i/interval= -/exit-status -/compact" "$@"
+  local id="$POS1" n j
+  [ -n "$id" ] || die "run ID required"
+  run_exists "$id" || die "could not find any workflow run with ID $id"
+  n="$(timeline_len "$id")"
+  [ "$(tick)" -lt "$n" ] && echo "$n" > "$DIR/state/tick"
+  j="$(run_json "$id")" || exit 1
+  jq -r "$RUN_TEXT" <<<"$j"
+  jq -r '"Run \(.workflowName) (\(.databaseId)) completed with '"'"'\(.conclusion)'"'"'"' <<<"$j"
+  if has_opt exit-status; then
+    jq -e '.conclusion == "success"' <<<"$j" >/dev/null || exit 1
+  fi
+}
+
+pr_json() {
+  [ -n "$1" ] || die "pass the pull request number"
+  [ -f "$DIR/prs/$1.json" ] || die "GraphQL: Could not resolve to a PullRequest with the number of $1."
+  jq -c . "$DIR/prs/$1.json"
+}
+
+cmd_pr_view() {
+  parse "R/repo= q/jq= -/json= t/template= c/comments w/web" "$@"
+  reject template web
+  local p
+  p="$(pr_json "$POS1")" || exit 1
+  show "$p" '"\(.title) #\(.number)", "\(.state)", "View this pull request on GitHub: \(.url)"'
+}
+
+cmd_pr_checks() {
+  parse "R/repo= q/jq= -/json= i/interval= -/watch -/required -/fail-fast" "$@"
+  local p branch id n max rows
+  p="$(pr_json "$POS1")" || exit 1
+  branch="$(jq -r .headRefName <<<"$p")"
+  if has_opt watch; then
+    max="$(tick)"
+    for id in $(run_ids); do
+      n="$(timeline_len "$id")"
+      [ "$n" -gt "$max" ] && max="$n"
+    done
+    echo "$max" > "$DIR/state/tick"
+  else
+    advance
+  fi
+  rows="$(for id in $(run_ids); do run_json "$id" || exit 1; done | jq -sc --arg br "$branch" '
+    def bucket: if .status != "completed" then "pending" elif .conclusion == "success" then "pass"
+      elif (.conclusion == "skipped" or .conclusion == "neutral") then "skipping"
+      elif .conclusion == "cancelled" then "cancel" else "fail" end;
+    def state: (if .status == "completed" then .conclusion else .status end) | ascii_upcase;
+    [ .[] | select(.headBranch == $br) | . as $run
+      | if (.jobs // []) == [] then {name: .workflowName, state: state, bucket: bucket, link: .url, workflow: .workflowName}
+        else (.jobs[] | {name, state: state, bucket: bucket, link: (.url // $run.url), workflow: $run.workflowName}) end ]')" || exit 1
+  [ "$(jq length <<<"$rows")" -gt 0 ] || die "no checks reported on the '$branch' branch"
+  show "$rows" '.[] | [.name, .bucket, "0", .link] | @tsv'
+  jq -e 'any(.[]; .bucket == "fail")' <<<"$rows" >/dev/null && exit 1
+  jq -e 'any(.[]; .bucket == "pending")' <<<"$rows" >/dev/null && exit 8
+  exit 0
+}
+
+issues_json() {
+  {
+    cat "$DIR/issues.json" 2>/dev/null || echo '[]'
+    cat "$DIR/state/created-issues.jsonl" 2>/dev/null || true
+  } | jq -sc '(.[0]) + .[1:]'
+}
+
+cmd_issue_list() {
+  parse "R/repo= q/jq= -/json= S/search= s/state= l/label= a/assignee= A/author= L/limit= m/milestone= -/app=" "$@"
+  local i
+  i="$(issues_json)" || exit 1
+  show "$i" '.[] | [(.number | tostring), .state, .title] | @tsv'
+}
+
+cmd_issue_view() {
+  parse "R/repo= q/jq= -/json= t/template= c/comments w/web" "$@"
+  reject template web
+  local i
+  i="$(issues_json | jq -c --arg n "$POS1" '.[] | select((.number | tostring) == $n)')"
+  [ -n "$i" ] || die "GraphQL: Could not resolve to an issue or pull request with the number of $POS1."
+  show "$i" '"\(.title) #\(.number)", "\(.state)", "", "\(.body // "")", "", "View this issue on GitHub: \(.url)"'
+}
+
+cmd_issue_create() {
+  parse "R/repo= t/title= b/body= F/body-file= l/label= a/assignee= m/milestone= p/project= T/template= w/web" "$@"
+  reject web
+  [ -n "$(opt title)" ] || die "must provide --title and --body when not running interactively"
+  local n url
+  n="$(cat "$DIR/state/next-issue" 2>/dev/null || echo 101)"
+  echo $((n + 1)) > "$DIR/state/next-issue"
+  url="https://github.com/$REPO/issues/$n"
+  jq -nc --argjson n "$n" --arg t "$(opt title)" --arg b "$(opt body)" --arg u "$url" \
+    '{number: $n, title: $t, body: $b, state: "OPEN", url: $u}' >> "$DIR/state/created-issues.jsonl"
+  echo "$url"
+}
+
+case "${1:-} ${2:-}" in
+  "run list") shift 2; cmd_run_list "$@" ;;
+  "run view") shift 2; cmd_run_view "$@" ;;
+  "run watch") shift 2; cmd_run_watch "$@" ;;
+  "pr view") shift 2; cmd_pr_view "$@" ;;
+  "pr checks") shift 2; cmd_pr_checks "$@" ;;
+  "issue list") shift 2; cmd_issue_list "$@" ;;
+  "issue view") shift 2; cmd_issue_view "$@" ;;
+  "issue create") shift 2; cmd_issue_create "$@" ;;
+  "auth status")
+    echo "github.com"
+    echo "  ✓ Logged in to github.com account fixture-user (stand-in CLI)"
+    ;;
+  "--version "* | "version "*) echo "gh version 2.0.0 (stand-in CLI for evals)" ;;
+  *) die "unsupported in this sandbox: gh $*. Supported: $SUPPORTED" ;;
+esac
