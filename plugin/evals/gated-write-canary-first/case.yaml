@@ -1,0 +1,17 @@
+schema_version: "1.1"
+name: gated-write-canary-first
+description: >
+  The operator approves, in this request, a change table already posted on the
+  issue, plus the dry run, a canary of two notes and the full run, waiving
+  their spot-check. gated-write re-reads the live records, then calls the data
+  connector (a fake CLI that logs every call) in order: dry run, a canary write
+  of 1-3 notes, then the rest. It writes only notes in the approved set, and
+  re-checks the result and posts a rollback ledger on the issue.
+tags: [gated-write]
+runs: 3
+execution:
+  max_turns: 40
+  timeout_seconds: 720
+  allowed_tools: [Read, Glob, Grep, Skill, Bash, Write, Edit]
+context:
+  scaffold_script: fixture-repo.sh
