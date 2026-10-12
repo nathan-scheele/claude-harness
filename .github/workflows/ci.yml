@@ -35,3 +35,13 @@ jobs:
           # out of this public repo.
           LEAK_PATTERNS: ${{ secrets.LEAK_PATTERNS }}
         run: scripts/leak-check.sh .
+
+  setup-detect:
+    strategy:
+      matrix:
+        os: [ubuntu-latest, macos-latest] # macOS for its bash 3.2
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: Setup detector tests
+        run: scripts/test-setup-detect.sh

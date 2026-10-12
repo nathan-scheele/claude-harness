@@ -1,0 +1,14 @@
+schema_version: "1.1"
+name: setup-previews-before-write
+description: >
+  Given every value it can't detect up front, setup-harness shows the complete
+  Project config it will write and asks the operator to confirm or correct it,
+  and does not write the file before that confirmation.
+tags: [setup]
+runs: 3
+execution:
+  max_turns: 30
+  timeout_seconds: 600
+  allowed_tools: [Read, Glob, Grep, Skill, Bash, Write, Edit]
+context:
+  scaffold_script: fixture-repo.sh

@@ -13,7 +13,7 @@ The Standards every Harness skill and subagent follows. They come from correctio
 
 **Pre-authorized**: read-only checks on any system, and writes to dev, sandbox or preview environments or to the operator's own issue tracker. Not Live writes.
 
-**Project config**: the per-repo document `docs/agents/harness.md` holding the values Harness skills read in that repo. Missing values are asked for, never guessed.
+**Project config**: the per-repo document `docs/agents/harness.md`, written by `harness:setup-harness`, holding the values Harness skills read in that repo. If it is missing, or a value a skill needs is missing or `unset`, stop and tell the operator to run `/harness:setup-harness`; never guess the value. `none` is a real answer.
 
 ## The Standards
 
