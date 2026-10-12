@@ -1,12 +1,13 @@
 #!/usr/bin/env bash
-# Tests for plugin/hooks/live-verifier-guard.sh, the PreToolUse hook that keeps
-# the live-verifier subagent's Bash read-only. Each case feeds the hook a
-# PreToolUse input and asserts it allows (no output) or denies (a deny decision).
+# Tests for plugin/hooks/guard.sh, the PreToolUse hook that keeps the
+# live-verifier subagent's Bash read-only and keeps every Harness browser page
+# in the background. Each case feeds the hook a PreToolUse input and asserts it
+# allows (no output) or denies (a deny decision).
 # Needs node, like the hook itself.
 set -uo pipefail
 
 HERE="$(cd "$(dirname "$0")" && pwd)"
-GUARD="$HERE/../plugin/hooks/live-verifier-guard.sh"
+GUARD="$HERE/../plugin/hooks/guard.sh"
 failures=0
 
 # A repo whose Project config names a fixture reset command and a read-only CLI.
@@ -76,6 +77,7 @@ expect allow 'git branch --show-current'
 expect allow 'find . -name "*.md" -type f'
 expect allow 'cd src && ls'
 expect allow 'jq ".items | length" response.json'
+expect deny 'base64 -o out.txt in.txt'
 expect allow "jq '.[] | select(.n > 1)' data.json"
 expect allow 'sort names.txt | uniq -c'
 expect allow 'grep -c tag notes.json 2>/dev/null'
@@ -184,6 +186,37 @@ else
   echo "FAIL - want deny for unreadable input, got: $out"
   failures=$((failures + 1))
 fi
+
+echo "# Harness browser pages stay in the background, for every agent"
+# expect_browser <allow|deny> <tool> <tool_input json> [agent_type]
+expect_browser() {
+  local want="$1" tool="$2" json="$3" agent="${4-}"
+  local input out got
+  input="{\"hook_event_name\":\"PreToolUse\",\"tool_name\":\"mcp__plugin_harness_browser__$tool\",\"tool_input\":$json${agent:+,\"agent_type\":\"$agent\"}}"
+  out="$(printf '%s' "$input" | "$GUARD" 2>&1)"
+  if [[ -z "$out" ]]; then
+    got=allow
+  elif [[ "$out" == *'"permissionDecision":"deny"'* ]]; then
+    got=deny
+  else
+    got=error
+  fi
+  if [[ "$got" == "$want" ]]; then
+    echo "ok   - $want: $tool $json${agent:+ [$agent]}"
+  else
+    echo "FAIL - want $want, got $got: $tool $json${agent:+ [$agent]}"
+    [[ -n "$out" ]] && echo "$out" | sed 's/^/       /'
+    failures=$((failures + 1))
+  fi
+}
+expect_browser allow new_page '{"url":"https://dev.example.com","background":true}' 'harness:live-verifier'
+expect_browser allow new_page '{"url":"https://dev.example.com","background":true}'
+expect_browser deny new_page '{"url":"https://dev.example.com"}' 'harness:live-verifier'
+expect_browser deny new_page '{"url":"https://dev.example.com","background":false}'
+expect_browser allow select_page '{"pageId":2}' 'harness:live-verifier'
+expect_browser allow select_page '{"pageId":2,"bringToFront":false}'
+expect_browser deny select_page '{"pageId":2,"bringToFront":true}'
+expect_browser allow navigate_page '{"url":"https://dev.example.com"}'
 
 if [[ $failures -gt 0 ]]; then
   echo "$failures failure(s)"

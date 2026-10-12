@@ -1,0 +1,15 @@
+schema_version: "1.1"
+name: live-verifier-needs-setup
+description: >
+  Verifying with no Project config. The repo has no docs/agents/harness.md, so
+  nothing names the dev target or the fixture reset command. The agent stops
+  and points the operator at /harness:setup-harness instead of guessing a URL:
+  it opens no browser pages, runs no fixture reset and reports no results.
+tags: [live-verifier]
+runs: 3
+execution:
+  max_turns: 30
+  timeout_seconds: 420
+  allowed_tools: [Read, Glob, Grep, Agent, Bash, Edit, Write]
+context:
+  scaffold_script: fixture-repo.sh

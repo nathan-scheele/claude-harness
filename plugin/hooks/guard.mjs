@@ -1,46 +1,65 @@
-// Checks a live-verifier Bash command and denies anything that could write.
-// Reads the PreToolUse input on stdin; prints a deny decision, or nothing to allow.
-// Allowlist, not denylist: a command passes only if every part of it is a known
-// read (file and git inspection, gh reads, curl GET/HEAD), the Project config's
-// fixture reset command, or a data-connector CLI the Project config marks read-only.
-// Anything it can't parse is denied.
+// PreToolUse checks. Reads the hook input on stdin; prints a deny decision, or
+// nothing to allow.
+//
+// Harness browser page tools, for every agent: pages open in the background and
+// are never brought to the front (S10).
+//
+// live-verifier's Bash: denies anything that could write. Allowlist, not
+// denylist: a command passes only if every part of it is a known read (file and
+// git inspection, gh reads, curl GET/HEAD), the Project config's fixture reset
+// command, or a data-connector CLI the Project config marks read-only. Anything
+// it can't parse is denied.
 import { existsSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 
 const AGENT = /(^|:)live-verifier$/;
+const BROWSER = "mcp__plugin_harness_browser__";
 
-const REASON_SUFFIX =
+const BASH_REASON =
   " live-verifier's Bash is read-only: file and git inspection, gh reads, curl GET/HEAD," +
   " the Project config fixture reset command, and data-connector CLIs it marks read-only." +
   " Use the browser tools for UI checks; report anything that needs a write instead of doing it.";
+const FOCUS_REASON = " The Harness browser must never take the operator's focus (S10).";
 
 function main() {
   let input;
   try {
     input = JSON.parse(readFileSync(0, "utf8"));
   } catch {
-    return deny("could not read the hook input.");
+    return deny("could not read the hook input.", "");
   }
-  if (input.tool_name !== "Bash" || !AGENT.test(String(input.agent_type ?? ""))) return;
+  const tool = String(input.tool_name ?? "");
+  if (tool.startsWith(BROWSER)) {
+    const reason = checkFocus(tool.slice(BROWSER.length), input.tool_input ?? {});
+    if (reason) deny(reason, FOCUS_REASON);
+    return;
+  }
+  if (tool !== "Bash" || !AGENT.test(String(input.agent_type ?? ""))) return;
   let reason;
   try {
     reason = check(String(input.tool_input?.command ?? ""), loadConfig(input.cwd));
   } catch (err) {
     reason = `guard error (${err.message}).`;
   }
-  if (reason) deny(reason);
+  if (reason) deny(reason, BASH_REASON);
 }
 
-function deny(reason) {
+function deny(reason, why) {
   process.stdout.write(
     JSON.stringify({
       hookSpecificOutput: {
         hookEventName: "PreToolUse",
         permissionDecision: "deny",
-        permissionDecisionReason: `Blocked: ${reason}${REASON_SUFFIX}`,
+        permissionDecisionReason: `Blocked: ${reason}${why}`,
       },
     }) + "\n",
   );
+}
+
+function checkFocus(tool, input) {
+  if (tool === "new_page" && input.background !== true) return "open pages with `background: true`.";
+  if (tool === "select_page" && input.bringToFront === true) return "don't pass `bringToFront: true`.";
+  return null;
 }
 
 // Project config (docs/agents/harness.md): the fixture reset command and the
@@ -209,7 +228,7 @@ const READERS = new Set([
   "cat", "head", "tail", "grep", "egrep", "fgrep", "wc", "cut", "tr", "ls", "pwd",
   "date", "echo", "printf", "basename", "dirname", "realpath", "stat", "diff", "cmp",
   "comm", "sleep", "true", "false", "test", "[", "which", "column", "nl", "od",
-  "base64", "shasum", "sha256sum", "md5", "md5sum", "cd", "jq",
+  "shasum", "sha256sum", "md5", "md5sum", "cd", "jq",
 ]);
 
 function checkSimple(words, config) {
@@ -346,51 +365,57 @@ function checkGhApi(args) {
   return null;
 }
 
+// curl options it allows, by what they mean for the check: "get" (-G, send data
+// as a query string), "method", "output", "data", or "" (harmless). A boolean
+// option takes no value.
+const CURL_SHORT_BOOL = { s: "", S: "", L: "", f: "", I: "", i: "", G: "get", k: "", v: "", 4: "", 6: "", g: "" };
+const CURL_SHORT_VALUE = { H: "", A: "", w: "", m: "", u: "", b: "", e: "", r: "", Y: "", y: "",
+  X: "method", o: "output", d: "data" };
+const CURL_LONG_BOOL = Object.fromEntries([
+  "--silent", "--show-error", "--location", "--fail", "--fail-with-body", "--head", "--include",
+  "--insecure", "--verbose", "--compressed", "--globoff", "--http1.1", "--http2",
+  "--no-progress-meter", "--ipv4", "--ipv6", "--location-trusted", "--raw", "--no-buffer", "--path-as-is",
+].map((o) => [o, ""]).concat([["--get", "get"]]));
+const CURL_LONG_VALUE = {
+  "--header": "", "--user-agent": "", "--write-out": "", "--max-time": "", "--connect-timeout": "",
+  "--retry": "", "--retry-delay": "", "--retry-max-time": "", "--user": "", "--oauth2-bearer": "",
+  "--cookie": "", "--referer": "", "--range": "", "--url": "", "--max-redirs": "",
+  "--request": "method", "--output": "output",
+  "--data": "data", "--data-urlencode": "data", "--data-raw": "data", "--data-ascii": "data",
+};
+
 function checkCurl(args) {
-  const SHORT_BOOL = new Set([..."sSLfIiGkv46g"]);
-  const SHORT_VALUE = new Set([..."HAwmuberYyXod"]);
-  const LONG_BOOL = new Set([
-    "--silent", "--show-error", "--location", "--fail", "--fail-with-body", "--head", "--include",
-    "--get", "--insecure", "--verbose", "--compressed", "--globoff", "--http1.1", "--http2",
-    "--no-progress-meter", "--ipv4", "--ipv6", "--location-trusted", "--raw", "--no-buffer", "--path-as-is",
-  ]);
-  const LONG_VALUE = {
-    "--header": "", "--user-agent": "", "--write-out": "", "--max-time": "", "--connect-timeout": "",
-    "--retry": "", "--retry-delay": "", "--retry-max-time": "", "--user": "", "--oauth2-bearer": "",
-    "--cookie": "", "--referer": "", "--range": "", "--url": "", "--max-redirs": "",
-    "--request": "X", "--output": "o", "--data": "d", "--data-urlencode": "d", "--data-raw": "d", "--data-ascii": "d",
-  };
-  const opts = [];
+  const opts = []; // [kind, value]
   for (let n = 0; n < args.length; n++) {
     const a = args[n];
     if (a.startsWith("--")) {
-      if (LONG_BOOL.has(a)) {
-        if (a === "--get") opts.push(["G"]);
+      if (a in CURL_LONG_BOOL) {
+        opts.push([CURL_LONG_BOOL[a]]);
         continue;
       }
-      if (!(a in LONG_VALUE)) return `\`curl ${a}\` is not allowed.`;
+      if (!(a in CURL_LONG_VALUE)) return `\`curl ${a}\` is not allowed.`;
       if (n + 1 >= args.length) return `\`curl ${a}\` needs a value.`;
-      opts.push([LONG_VALUE[a], args[++n]]);
+      opts.push([CURL_LONG_VALUE[a], args[++n]]);
     } else if (a.startsWith("-") && a.length > 1) {
       for (let k = 1; k < a.length; k++) {
         const ch = a[k];
-        if (SHORT_BOOL.has(ch)) {
-          if (ch === "G") opts.push(["G"]);
+        if (ch in CURL_SHORT_BOOL) {
+          opts.push([CURL_SHORT_BOOL[ch]]);
           continue;
         }
-        if (!SHORT_VALUE.has(ch)) return `\`curl -${ch}\` is not allowed.`;
+        if (!(ch in CURL_SHORT_VALUE)) return `\`curl -${ch}\` is not allowed.`;
         const value = k + 1 < a.length ? a.slice(k + 1) : args[++n];
         if (value === undefined) return `\`curl -${ch}\` needs a value.`;
-        opts.push([ch, value]);
+        opts.push([CURL_SHORT_VALUE[ch], value]);
         break;
       }
     }
   }
-  const get = opts.some(([o]) => o === "G");
-  for (const [o, value] of opts) {
-    if (o === "X" && !["GET", "HEAD"].includes(value.toUpperCase())) return `\`curl -X ${value}\` is a write.`;
-    if (o === "o" && value !== "/dev/null") return "`curl -o` writes a file.";
-    if (o === "d" && !get) return "`curl -d` sends a POST (add -G to send it as a query string).";
+  const get = opts.some(([kind]) => kind === "get");
+  for (const [kind, value] of opts) {
+    if (kind === "method" && !["GET", "HEAD"].includes(value.toUpperCase())) return `\`curl -X ${value}\` is a write.`;
+    if (kind === "output" && value !== "/dev/null") return "`curl -o` writes a file.";
+    if (kind === "data" && !get) return "`curl -d` sends a POST (add -G to send it as a query string).";
   }
   return null;
 }

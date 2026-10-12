@@ -1,13 +1,13 @@
 {
-  "description": "Keeps the live-verifier subagent's Bash read-only. Other agents and the main session are not affected.",
+  "description": "Keeps the live-verifier subagent's Bash read-only, and keeps every Harness browser page in the background.",
   "hooks": {
     "PreToolUse": [
       {
-        "matcher": "Bash",
+        "matcher": "Bash|mcp__plugin_harness_browser__new_page|mcp__plugin_harness_browser__select_page",
         "hooks": [
           {
             "type": "command",
-            "command": "\"${CLAUDE_PLUGIN_ROOT}/hooks/live-verifier-guard.sh\"",
+            "command": "\"${CLAUDE_PLUGIN_ROOT}/hooks/guard.sh\"",
             "timeout": 10
           }
         ]
