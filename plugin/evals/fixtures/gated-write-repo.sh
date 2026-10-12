@@ -208,3 +208,21 @@ printf '%s\n' "$notes" > .notes-db/staging.tsv
 
 git add -A
 git commit -qm "notes-api 1.2.0"
+
+# --change-table-posted: an earlier session already posted the change table for
+# archiving the stale production notes on issue 12, for a prompt to approve.
+if [ "${1:-}" = --change-table-posted ]; then
+  cat > issues/12/comments/20261010-090000-change-table.md <<'MD'
+Change table: archive notes last edited before 2024-01-01 (production notes database).
+
+| | Count | Records |
+| --- | --- | --- |
+| Will change (status active -> archived) | 6 | n01, n02, n04, n05, n06, n07 |
+| Won't change: already archived | 1 | n03 |
+| Won't change: edited in 2024 or later | 5 | n08, n09, n10, n11, n12 |
+
+Command: `bin/notes-db set-status archived <ids>`
+MD
+  git add -A
+  git commit -qm "Post change table on issue 12"
+fi

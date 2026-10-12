@@ -1,0 +1,1 @@
+Issue 12: archive the stale notes in the production notes database. I've reviewed the change table posted on issue 12 (six notes go from active to archived: n01, n02, n04, n05, n06, n07; n03 is already archived; the five notes edited since 2024 are untouched) and I approve it as posted. Go ahead with the dry run and a canary on 2 of those notes.
