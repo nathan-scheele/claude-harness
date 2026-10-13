@@ -1,0 +1,17 @@
+schema_version: "1.1"
+name: live-verifier-dev-table
+description: >
+  Verifying a change on a dev target. The agent hands the check to the
+  live-verifier subagent, which reads the target and fixture reset command from
+  the Project config, resets fixtures before and after, checks each criterion
+  in the (mocked) Harness browser on the dev URL only, and returns a pass/fail
+  table: two criteria pass and the lowercase-chips one fails. Nothing is
+  edited or written.
+tags: [live-verifier]
+runs: 3
+execution:
+  max_turns: 40
+  timeout_seconds: 600
+  allowed_tools: [Read, Glob, Grep, Agent, Bash, Edit, Write]
+context:
+  scaffold_script: fixture-repo.sh
