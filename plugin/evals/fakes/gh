@@ -11,7 +11,7 @@ DIR="${FAKE_GH_DIR:-$(cd "$(dirname "$0")/.." && pwd)}"
 mkdir -p "$DIR/state"
 printf '%s\n' "gh${*:+ $(printf '%s' "$*" | tr '\n' ' ')}" >> "$DIR/calls.log"
 
-SUPPORTED="run list, run view, run watch, pr create, pr list, pr view, pr checks, pr merge, issue list, issue view, issue create, issue close, issue comment, auth status, --version"
+SUPPORTED="run list, run view, run watch, workflow list, pr create, pr list, pr view, pr edit, pr checks, pr merge, issue list, issue view, issue create, issue close, issue reopen, issue comment, auth status, --version"
 
 die() {
   echo "fake gh: $*" >&2
@@ -20,6 +20,7 @@ die() {
 
 command -v jq >/dev/null 2>&1 || die "needs jq on PATH"
 REPO="$(cat "$DIR/repo" 2>/dev/null || echo example-org/example-repo)"
+DEFAULT_BRANCH="$(cat "$DIR/default-branch" 2>/dev/null || echo main)"
 
 # --- argument parsing ---
 
@@ -111,6 +112,15 @@ emit() {
 }
 
 wants_json() { has_opt json || has_opt jq; }
+
+# read_body: the --body-file's text (- reads stdin), else --body.
+read_body() {
+  if has_opt body-file; then
+    cat "$(opt body-file)" || die "could not read $(opt body-file)"
+  else
+    opt body
+  fi
+}
 
 reject() {
   local f
@@ -327,17 +337,14 @@ cmd_pr_create() {
   parse "R/repo= t/title= b/body= F/body-file= B/base= H/head= d/draft f/fill l/label= a/assignee= r/reviewer= m/milestone= p/project= w/web" "$@"
   reject web fill
   local head base body n url existing
-  [ -n "$(opt title)" ] || die "must provide --title and --body (or --body-file) when not running interactively"
+  [ -n "$(opt title)" ] && { has_opt body || has_opt body-file; } \
+    || die "must provide --title and --body (or --body-file) when not running interactively"
   head="$(opt head)"
   [ -n "$head" ] || head="$(current_branch)"
   [ -n "$head" ] || die "could not determine the current branch; pass --head"
   base="$(opt base)"
-  [ -n "$base" ] || base="$(cat "$DIR/default-branch" 2>/dev/null || echo main)"
-  if has_opt body-file; then
-    if [ "$(opt body-file)" = - ]; then body="$(cat)"; else body="$(cat "$(opt body-file)")" || die "could not read $(opt body-file)"; fi
-  else
-    body="$(opt body)"
-  fi
+  [ -n "$base" ] || base="$DEFAULT_BRANCH"
+  body="$(read_body)" || exit 1
   existing="$(all_prs | jq -r --arg h "$head" --arg b "$base" '[.[] | select(.headRefName == $h and .baseRefName == $b and .state == "OPEN")][0].url // empty')"
   [ -z "$existing" ] || die "a pull request for branch \"$head\" into branch \"$base\" already exists:
 $existing"
@@ -353,8 +360,34 @@ $existing"
   echo "$url"
 }
 
+# merge_sha <branch>: the headSha of the run that starts when that branch merges.
+merge_sha() {
+  local d
+  for d in "$DIR"/runs/*/; do
+    if [ -f "$d/run.json" ] && [ "$(starts_on "$(basename "$d")")" = "merge:$1" ]; then
+      jq -r .headSha "$d/run.json"
+      return
+    fi
+  done
+}
+
+cmd_pr_edit() {
+  parse "R/repo= t/title= b/body= F/body-file= B/base= -/add-label= -/remove-label= -/add-reviewer= -/add-assignee=" "$@"
+  local p body
+  p="$(pr_json "$POS1")" || exit 1
+  if has_opt body || has_opt body-file; then
+    body="$(read_body)" || exit 1
+    p="$(jq -c --arg b "$body" '.body = $b' <<<"$p")"
+  fi
+  has_opt title && p="$(jq -c --arg t "$(opt title)" '.title = $t' <<<"$p")"
+  has_opt base && p="$(jq -c --arg b "$(opt base)" '.baseRefName = $b' <<<"$p")"
+  save_pr "$p"
+  jq -r .url <<<"$p"
+}
+
 cmd_pr_merge() {
   parse "R/repo= s/squash m/merge r/rebase d/delete-branch -/auto -/admin t/subject= b/body= F/body-file= -/match-head-commit=" "$@"
+  reject auto
   local p method head sha n issue verb
   method=""
   for n in squash merge rebase; do
@@ -371,17 +404,14 @@ cmd_pr_merge() {
     CLOSED) die "Pull request #$n is closed" ;;
   esac
   head="$(jq -r .headRefName <<<"$p")"
-  sha=""
-  for id in $(for d in "$DIR"/runs/*/; do basename "$d"; done); do
-    [ -f "$DIR/runs/$id/run.json" ] && [ "$(starts_on "$id")" = "merge:$head" ] && sha="$(jq -r .headSha "$DIR/runs/$id/run.json")"
-  done
+  sha="$(merge_sha "$head")"
   [ -n "$sha" ] || sha="$(printf '%040d' "$n")"
   save_pr "$(jq -c --arg sha "$sha" '.state = "MERGED" | .mergeCommit = {oid: $sha}' <<<"$p")"
   start "merge:$head"
   # Closing keywords in the body close issues when the PR merges into the default branch.
-  if [ "$(jq -r .baseRefName <<<"$p")" = "$(cat "$DIR/default-branch" 2>/dev/null || echo main)" ]; then
+  if [ "$(jq -r .baseRefName <<<"$p")" = "$DEFAULT_BRANCH" ]; then
     for issue in $(jq -r '.body // "" | [scan("(?i)\\b(?:close[sd]?|fix(?:e[sd])?|resolve[sd]?):?\\s+#([0-9]+)")[0]] | .[]' <<<"$p"); do
-      echo "$issue" >> "$DIR/state/closed-issues"
+      set_issue_state "$issue" CLOSED
     done
   fi
   case "$method" in
@@ -424,15 +454,19 @@ cmd_pr_checks() {
   exit 0
 }
 
+# Issue state changes (close, reopen, closed by a merge) are lines of
+# "<number> <STATE>" in state/issue-states; the last line for an issue wins.
+set_issue_state() { echo "$1 $2" >> "$DIR/state/issue-states"; }
+
 issues_json() {
-  local closed
-  closed='[]'
-  [ -f "$DIR/state/closed-issues" ] && closed="$(jq -Rsc 'split("\n") | map(select(. != ""))' "$DIR/state/closed-issues")"
+  local states
+  states='{}'
+  [ -f "$DIR/state/issue-states" ] && states="$(jq -Rsc 'split("\n") | map(select(. != "") | split(" ") | {(.[0]): .[1]}) | add // {}' "$DIR/state/issue-states")"
   {
     cat "$DIR/issues.json" 2>/dev/null || echo '[]'
     cat "$DIR/state/created-issues.jsonl" 2>/dev/null || true
-  } | jq -sc --argjson closed "$closed" --argjson comments "$(issue_comments)" '(.[0]) + .[1:]
-    | map(if (.number | tostring) as $n | $closed | index($n) then .state = "CLOSED" else . end)
+  } | jq -sc --argjson states "$states" --argjson comments "$(issue_comments)" '(.[0]) + .[1:]
+    | map(.state = ($states[.number | tostring] // .state))
     | map((.number | tostring) as $n | .comments = ((.comments // []) + [$comments[] | select(.issue == $n) | {body}]))'
 }
 
@@ -479,25 +513,46 @@ cmd_issue_close() {
     echo "! Issue #$POS1 ($(jq -r .title <<<"$i")) is already closed"
     return 0
   fi
-  echo "$POS1" >> "$DIR/state/closed-issues"
+  set_issue_state "$POS1" CLOSED
+  has_opt comment && add_comment "$POS1" "$(opt comment)"
   echo "✓ Closed issue #$POS1 ($(jq -r .title <<<"$i"))"
+}
+
+cmd_issue_reopen() {
+  parse "R/repo= c/comment=" "$@"
+  local i
+  i="$(issues_json | jq -c --arg n "$POS1" '.[] | select((.number | tostring) == $n)')"
+  [ -n "$i" ] || die "GraphQL: Could not resolve to an issue or pull request with the number of $POS1."
+  set_issue_state "$POS1" OPEN
+  has_opt comment && add_comment "$POS1" "$(opt comment)"
+  echo "✓ Reopened issue #$POS1 ($(jq -r .title <<<"$i"))"
+}
+
+# add_comment <issue> <body>: records a comment; prints its URL.
+add_comment() {
+  jq -nc --arg i "$1" --arg b "$2" '{issue: $i, body: $b}' >> "$DIR/state/comments.jsonl"
+  echo "https://github.com/$REPO/issues/$1#issuecomment-$((900000 + $(grep -c . "$DIR/state/comments.jsonl")))"
 }
 
 cmd_issue_comment() {
   parse "R/repo= b/body= F/body-file= e/editor w/web" "$@"
   reject editor web
-  local body n
+  local body
   issues_json | jq -e --arg n "$POS1" 'any(.[]; (.number | tostring) == $n)' >/dev/null \
     || die "GraphQL: Could not resolve to an issue or pull request with the number of $POS1."
-  if has_opt body-file; then
-    body="$(cat "$(opt body-file)")" || die "could not read $(opt body-file)"
-  else
-    body="$(opt body)"
-  fi
+  body="$(read_body)" || exit 1
   [ -n "$body" ] || die "--body or --body-file required when not running interactively"
-  jq -nc --arg i "$POS1" --arg b "$body" '{issue: $i, body: $b}' >> "$DIR/state/comments.jsonl"
-  n="$(grep -c . "$DIR/state/comments.jsonl")"
-  echo "https://github.com/$REPO/issues/$POS1#issuecomment-$((900000 + n))"
+  add_comment "$POS1" "$body"
+}
+
+# Workflows are the ones the scenario's runs belong to, all active.
+cmd_workflow_list() {
+  parse "R/repo= q/jq= -/json= a/all L/limit=" "$@"
+  local w
+  w="$(for d in "$DIR"/runs/*/; do if [ -f "$d/run.json" ]; then jq -c . "$d/run.json"; fi; done | jq -sc '
+    [.[] | {name: .workflowName, path}] | unique_by(.path)
+    | to_entries | map(.value + {id: (.key + 1), state: "active"})')"
+  show "$w" '.[] | [.name, .state, (.id | tostring)] | @tsv'
 }
 
 case "${1:-} ${2:-}" in
@@ -508,12 +563,15 @@ case "${1:-} ${2:-}" in
   "pr list") shift 2; cmd_pr_list "$@" ;;
   "pr view") shift 2; cmd_pr_view "$@" ;;
   "pr merge") shift 2; cmd_pr_merge "$@" ;;
+  "pr edit") shift 2; cmd_pr_edit "$@" ;;
   "pr checks") shift 2; cmd_pr_checks "$@" ;;
   "issue list") shift 2; cmd_issue_list "$@" ;;
   "issue view") shift 2; cmd_issue_view "$@" ;;
   "issue create") shift 2; cmd_issue_create "$@" ;;
   "issue close") shift 2; cmd_issue_close "$@" ;;
   "issue comment") shift 2; cmd_issue_comment "$@" ;;
+  "issue reopen") shift 2; cmd_issue_reopen "$@" ;;
+  "workflow list") shift 2; cmd_workflow_list "$@" ;;
   "auth status")
     echo "github.com"
     echo "  ✓ Logged in to github.com account fixture-user (stand-in CLI)"

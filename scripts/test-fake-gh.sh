@@ -237,6 +237,12 @@ fake "$d" pr view "$n" --json body --jq .body
 ok_if "pr create --body-file stores the file's text" has "Fixes #11"
 fake "$d" pr create --body "no title" --head other
 ok_if "pr create without a title exits non-zero" test "$code" -ne 0
+fake "$d" pr create --title "No body" --head other
+ok_if "pr create without a body exits non-zero" test "$code" -ne 0
+fake "$d" pr edit "$n" --body "Closes #11 and more"
+ok_if "pr edit succeeds" test "$code" -eq 0
+fake "$d" pr view "$n" --json body --jq .body
+ok_if "pr edit replaces the body" test "$out" = "Closes #11 and more"
 rm -rf "$d"
 
 d="$(new_scenario)"
@@ -323,21 +329,29 @@ rm -rf "$d"
 
 d="$(new_ship_scenario)"
 fake "$d" pr create --title "Normalize note tags" --body "Part of #11" --head add-note-tags
+fake "$d" pr merge 12 --squash --auto
+ok_if "pr merge --auto is refused (it would only arm auto-merge)" has "--auto is not supported"
 fake "$d" pr merge 12 --merge --delete-branch
 ok_if "pr merge --merge succeeds" has "Merged pull request #12"
 fake "$d" issue view 11 --json state --jq .state
 ok_if "no closing keyword: the issue stays open" test "$out" = "OPEN"
 fake "$d" issue close 11 --comment "Landed in #12"
 ok_if "issue close succeeds" test "$code" -eq 0
+fake "$d" issue view 11 --json comments --jq '.comments[].body'
+ok_if "issue close --comment adds the comment" test "$out" = "Landed in #12"
 ok_if "issue close is logged" logged "$d" "gh issue close 11 --comment Landed in #12"
 fake "$d" issue view 11 --json state --jq .state
 ok_if "closed issue views as CLOSED" test "$out" = "CLOSED"
+fake "$d" issue reopen 11
+ok_if "issue reopen succeeds" test "$code" -eq 0
+fake "$d" issue view 11 --json state --jq .state
+ok_if "reopened issue views as OPEN" test "$out" = "OPEN"
 fake "$d" issue close 99
 ok_if "closing an unknown issue exits non-zero" test "$code" -ne 0
 fake "$d" issue comment 11 --body "Verified live"
 ok_if "issue comment prints the comment URL" has "https://github.com/example-org/notes-api/issues/11#issuecomment-"
 ok_if "issue comment is logged" logged "$d" "gh issue comment 11 --body Verified live"
-fake "$d" issue view 11 --json comments --jq '.comments[].body'
+fake "$d" issue view 11 --json comments --jq '.comments[-1].body'
 ok_if "the comment shows on the issue" test "$out" = "Verified live"
 fake "$d" issue comment 99 --body "x"
 ok_if "commenting on an unknown issue exits non-zero" test "$code" -ne 0
@@ -345,6 +359,8 @@ fake "$d" pr merge 13 --squash
 ok_if "merging an unknown PR exits non-zero" test "$code" -ne 0
 fake "$d" pr merge 12
 ok_if "pr merge without a method exits non-zero" test "$code" -ne 0
+fake "$d" workflow list --json name,path,state --jq '.[] | "\(.name) \(.path) \(.state)"'
+ok_if "workflow list names the scenario's workflows" test "$out" = "CI .github/workflows/ci.yml active"
 rm -rf "$d"
 
 if [[ $failures -gt 0 ]]; then

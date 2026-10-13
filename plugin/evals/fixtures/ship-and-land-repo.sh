@@ -179,6 +179,7 @@ for g in /opt/homebrew/bin/git /usr/local/bin/git "$(command -v git)"; do
     break
   fi
 done
+[[ -x .fake-gh/bin/git ]] || { echo "fixture: no git usable in the eval sandbox (on macOS, install Homebrew git)" >&2; exit 1; }
 : > .fake-gh/calls.log
 printf 'example-org/notes-api\n' > .fake-gh/repo
 printf '12\n' > .fake-gh/next-pr
@@ -189,8 +190,8 @@ cat > .fake-gh/issues.json <<'JSON'
   "body": "Tags typed as `Work`, ` work ` and `WORK` show up as three different chips.\n\n## Acceptance criteria\n\n- [ ] Tag chips on `/notes` render in lowercase.\n- [ ] A note never shows the same tag twice (`Work` and `work` are one chip).\n"}]
 JSON
 
-# run <id> <workflow name> <file> <branch> <sha> <event> <title> <startsOn>
-run() {
+# write_run <id> <workflow name> <file> <branch> <sha> <event> <title> <startsOn>
+write_run() {
   mkdir -p ".fake-gh/runs/$1"
   cat > ".fake-gh/runs/$1/run.json" <<JSON
 {"databaseId": $1, "workflowName": "$2", "path": ".github/workflows/$3",
@@ -203,7 +204,7 @@ job() { # job <id> <name> <status> <conclusion>
 }
 
 if [[ "$VARIANT" != --checks-never-fire ]]; then
-  run 4001 CI ci.yml "$BRANCH" "$HEAD_SHA" pull_request "Lowercase, trim and dedupe note tags" "pr-open:$BRANCH"
+  write_run 4001 CI ci.yml "$BRANCH" "$HEAD_SHA" pull_request "Lowercase, trim and dedupe note tags" "pr-open:$BRANCH"
   cat > .fake-gh/runs/4001/timeline.jsonl <<JSONL
 {"status": "queued", "conclusion": "", "jobs": []}
 {"status": "in_progress", "conclusion": "", "jobs": [$(job 41 lint in_progress ""), $(job 42 test in_progress "")]}
@@ -211,14 +212,14 @@ if [[ "$VARIANT" != --checks-never-fire ]]; then
 JSONL
 fi
 
-run 4002 CI ci.yml main "$MERGE_SHA" push "Normalize note tags (#12)" "merge:$BRANCH"
+write_run 4002 CI ci.yml main "$MERGE_SHA" push "Normalize note tags (#12)" "merge:$BRANCH"
 cat > .fake-gh/runs/4002/timeline.jsonl <<JSONL
 {"status": "queued", "conclusion": "", "jobs": []}
 {"status": "in_progress", "conclusion": "", "jobs": [$(job 51 lint completed success), $(job 52 test in_progress "")]}
 {"status": "completed", "conclusion": "success", "jobs": [$(job 51 lint completed success), $(job 52 test completed success)]}
 JSONL
 
-run 4003 Deploy deploy.yml main "$MERGE_SHA" push "Normalize note tags (#12)" "merge:$BRANCH"
+write_run 4003 Deploy deploy.yml main "$MERGE_SHA" push "Normalize note tags (#12)" "merge:$BRANCH"
 D_RUN='{"databaseId": 61, "name": "deploy", "status": "in_progress", "conclusion": "", "steps": [{"number": 1, "name": "Checkout", "status": "completed", "conclusion": "success"}, {"number": 2, "name": "Deploy", "status": "in_progress", "conclusion": ""}]}'
 D_OK='{"databaseId": 61, "name": "deploy", "status": "completed", "conclusion": "success", "steps": [{"number": 1, "name": "Checkout", "status": "completed", "conclusion": "success"}, {"number": 2, "name": "Deploy", "status": "completed", "conclusion": "success"}]}'
 cat > .fake-gh/runs/4003/timeline.jsonl <<JSONL

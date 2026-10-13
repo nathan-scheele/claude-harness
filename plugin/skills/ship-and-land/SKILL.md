@@ -48,7 +48,7 @@ v1 ships on GitHub only. If **Host** is anything else, say so and stop.
 
 Watch the PR's checks with the run-monitor procedure. Load `harness:run-monitor` now with the Skill tool, before the first poll, and follow its steps 2-6 for this PR at the operator's interval (60 seconds if they gave none). If it isn't available, follow the polling rules below anyway.
 
-**Polling rules** (here and in step 7): each poll is its own Bash call (`sleep <interval>; <status read>`), and after each one you post a status line to the operator before the next (S6). Never loop several polls inside one Bash call, script or background task, and never use a blocking watcher: both go silent until the end (ADR 0004).
+**Polling** (here and in step 7) follows run-monitor step 4. The rule most often broken: one poll per Bash call, then a status line, then the next poll. A loop of polls inside one Bash call goes silent until the end, like a blocking watcher (ADR 0004).
 
 Before asking to merge, put the checks in exactly one of these buckets, with evidence:
 
@@ -68,7 +68,7 @@ If **Merging deploys** is `yes`, the merge is a Live write (S1). The request tha
 - the merge method from **Method**, into **Default branch**;
 - what deploys and where: **Target**, **Triggered by**, **Live URL**.
 
-Then ask for the go-ahead as a structured decision (S4): merge now (Recommended, when green), or hold. Stop and wait. Merge only on an explicit yes to this merge. The one exception: the operator already gave, in this conversation, an explicit go-ahead that names this merge (or "the PR for issue <n>") and accepts that it deploys, such as "you have my go-ahead to squash-merge it into main once CI is green; that deploys to production". Then post the summary and proceed, but only if CI matched their condition. A go-ahead for an earlier PR, or a bare "ship it", never counts.
+Then ask for the go-ahead as a structured decision (S4): merge now (Recommended, when green), or hold. Stop and wait. Merge only on an explicit yes to this merge. The one exception: the operator already gave, in this conversation, an explicit go-ahead that names this merge (or "the PR for issue <n>") and accepts that it deploys, such as "you have my go-ahead to squash-merge it into main once CI is green; that deploys to production". Then post the summary and proceed, but only if CI matched their condition (S1, ADR 0008). A go-ahead for an earlier PR, or a bare "ship it", never counts.
 
 If **Merging deploys** is `no`, merging is not a Live write: post the summary and merge once CI is green.
 
