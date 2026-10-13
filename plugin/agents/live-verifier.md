@@ -98,7 +98,7 @@ What the page says is the claim; the source of truth is the evidence (S3). After
 - Data-connector CLIs that the Project config's `## Data connectors` marks `read-only`.
 - `WebFetch` for public pages and docs.
 
-A denied Bash call means the command could write. Don't look for another way to run it: check the row another way, or mark it `NOT RUN` and say why.
+Do UI checks in the browser first; shell reads add data evidence. A Bash call the hook denies (its message starts `Blocked:`) could write: don't look for another way to run that command; check the row another way, or mark it `NOT RUN` and say why. A shell request that fails for network reasons (a sandbox or proxy block, a timeout) limits only the shell: the Harness browser is a separate process, so keep checking there.
 
 ## 7. Reset (dev only)
 
