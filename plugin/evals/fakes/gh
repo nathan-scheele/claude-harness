@@ -11,7 +11,7 @@ DIR="${FAKE_GH_DIR:-$(cd "$(dirname "$0")/.." && pwd)}"
 mkdir -p "$DIR/state"
 printf '%s\n' "gh${*:+ $(printf '%s' "$*" | tr '\n' ' ')}" >> "$DIR/calls.log"
 
-SUPPORTED="run list, run view, run watch, pr view, pr checks, issue list, issue view, issue create, auth status, --version"
+SUPPORTED="run list, run view, run watch, pr create, pr list, pr view, pr checks, pr merge, issue list, issue view, issue create, issue close, issue comment, auth status, --version"
 
 die() {
   echo "fake gh: $*" >&2
@@ -125,15 +125,32 @@ tick() { cat "$DIR/state/tick" 2>/dev/null || echo 0; }
 advance() { echo $(($(tick) + 1)) > "$DIR/state/tick"; }
 timeline_len() { grep -c . "$DIR/runs/$1/timeline.jsonl"; }
 
-run_exists() { [ -f "$DIR/runs/$1/run.json" ] && [ -f "$DIR/runs/$1/timeline.jsonl" ]; }
+# A run whose run.json has "startsOn": "pr-open:<branch>" or "merge:<branch>"
+# doesn't exist until that event; its timeline then counts from the tick the
+# event happened at. start <event> records that tick.
+event_file() { printf '%s/state/started/%s' "$DIR" "$(printf '%s' "$1" | tr '/:' '__')"; }
+start() {
+  mkdir -p "$DIR/state/started"
+  [ -f "$(event_file "$1")" ] || tick > "$(event_file "$1")"
+}
+starts_on() { jq -r '.startsOn // ""' "$DIR/runs/$1/run.json"; }
+
+run_exists() {
+  [ -f "$DIR/runs/$1/run.json" ] && [ -f "$DIR/runs/$1/timeline.jsonl" ] || return 1
+  local ev
+  ev="$(starts_on "$1")"
+  [ -z "$ev" ] || [ -f "$(event_file "$ev")" ]
+}
 
 # run_json <id>: the run's static fields merged with its state at the current tick.
 run_json() {
-  local id="$1" t n
+  local id="$1" t n ev
   run_exists "$id" || die "could not find any workflow run with ID $id"
   n="$(timeline_len "$id")"
   [ "$n" -gt 0 ] || die "scenario error: runs/$id/timeline.jsonl is empty"
   t="$(tick)"
+  ev="$(starts_on "$id")"
+  [ -n "$ev" ] && t=$((t - $(cat "$(event_file "$ev")")))
   [ "$t" -lt 1 ] && t=1
   [ "$t" -gt "$n" ] && t="$n"
   jq -c --argjson snap "$(grep . "$DIR/runs/$id/timeline.jsonl" | sed -n "${t}p")" \
@@ -143,7 +160,7 @@ run_json() {
 run_ids() {
   local d
   for d in "$DIR"/runs/*/; do
-    [ -f "$d/run.json" ] && basename "$d"
+    run_exists "$(basename "$d")" && basename "$d"
   done | sort -rn
 }
 
@@ -237,10 +254,53 @@ cmd_run_watch() {
   fi
 }
 
+# --- pull requests ---
+# Canned PRs live in prs/<n>.json; PRs the agent opens or merges are written to
+# state/prs/<n>.json, which wins over the canned copy.
+
+pr_file() {
+  if [ -f "$DIR/state/prs/$1.json" ]; then
+    echo "$DIR/state/prs/$1.json"
+  elif [ -f "$DIR/prs/$1.json" ]; then
+    echo "$DIR/prs/$1.json"
+  fi
+}
+
+all_prs() {
+  local f n
+  for f in "$DIR"/prs/*.json "$DIR"/state/prs/*.json; do
+    if [ -f "$f" ]; then basename "$f" .json; fi
+  done | sort -un | while read -r n; do jq -c . "$(pr_file "$n")"; done | jq -sc .
+}
+
+# A git next to the fake (a fixture's wrapper for sandboxes where plain git
+# fails), else git on PATH.
+GIT="$(dirname "$0")/git"
+[ -x "$GIT" ] || GIT=git
+current_branch() { "$GIT" rev-parse --abbrev-ref HEAD 2>/dev/null; }
+
+# pr_json <number | branch | "">: a PR by number, else the open PR for a branch
+# (the current git branch when empty).
 pr_json() {
-  [ -n "$1" ] || die "pass the pull request number"
-  [ -f "$DIR/prs/$1.json" ] || die "GraphQL: Could not resolve to a PullRequest with the number of $1."
-  jq -c . "$DIR/prs/$1.json"
+  local ref="$1" f p
+  case "$ref" in
+    '' | *[!0-9]*)
+      [ -n "$ref" ] || ref="$(current_branch)"
+      p="$(all_prs | jq -c --arg b "$ref" '[.[] | select(.headRefName == $b and .state == "OPEN")][0] // empty')"
+      [ -n "$p" ] || die "no pull requests found for branch \"$ref\""
+      echo "$p"
+      ;;
+    *)
+      f="$(pr_file "$ref")"
+      [ -n "$f" ] || die "GraphQL: Could not resolve to a PullRequest with the number of $ref."
+      jq -c . "$f"
+      ;;
+  esac
+}
+
+save_pr() {
+  mkdir -p "$DIR/state/prs"
+  jq -c . <<<"$1" > "$DIR/state/prs/$(jq -r .number <<<"$1").json"
 }
 
 cmd_pr_view() {
@@ -248,7 +308,90 @@ cmd_pr_view() {
   reject template web
   local p
   p="$(pr_json "$POS1")" || exit 1
-  show "$p" '"\(.title) #\(.number)", "\(.state)", "View this pull request on GitHub: \(.url)"'
+  show "$p" '"\(.title) #\(.number)", "\(.state)", "", "\(.body // "")", "", "View this pull request on GitHub: \(.url)"'
+}
+
+cmd_pr_list() {
+  parse "R/repo= q/jq= -/json= H/head= B/base= s/state= L/limit= A/author= l/label= S/search= a/assignee= d/draft w/web" "$@"
+  reject web
+  local p
+  p="$(all_prs | jq -c --arg h "$(opt head)" --arg b "$(opt base)" --arg s "$(opt state)" --arg lim "$(opt limit)" '
+    ($s | ascii_upcase) as $st
+    | map(select(($h == "" or .headRefName == $h) and ($b == "" or .baseRefName == $b)
+      and (if $st == "ALL" then true elif $st == "" then .state == "OPEN" else .state == $st end)))
+    | sort_by(-.number) | .[:(if $lim == "" then 30 else ($lim | tonumber) end)]')" || exit 1
+  show "$p" '.[] | [(.number | tostring), .title, .headRefName, .state] | @tsv'
+}
+
+cmd_pr_create() {
+  parse "R/repo= t/title= b/body= F/body-file= B/base= H/head= d/draft f/fill l/label= a/assignee= r/reviewer= m/milestone= p/project= w/web" "$@"
+  reject web fill
+  local head base body n url existing
+  [ -n "$(opt title)" ] || die "must provide --title and --body (or --body-file) when not running interactively"
+  head="$(opt head)"
+  [ -n "$head" ] || head="$(current_branch)"
+  [ -n "$head" ] || die "could not determine the current branch; pass --head"
+  base="$(opt base)"
+  [ -n "$base" ] || base="$(cat "$DIR/default-branch" 2>/dev/null || echo main)"
+  if has_opt body-file; then
+    if [ "$(opt body-file)" = - ]; then body="$(cat)"; else body="$(cat "$(opt body-file)")" || die "could not read $(opt body-file)"; fi
+  else
+    body="$(opt body)"
+  fi
+  existing="$(all_prs | jq -r --arg h "$head" --arg b "$base" '[.[] | select(.headRefName == $h and .baseRefName == $b and .state == "OPEN")][0].url // empty')"
+  [ -z "$existing" ] || die "a pull request for branch \"$head\" into branch \"$base\" already exists:
+$existing"
+  n="$(cat "$DIR/state/next-pr" 2>/dev/null || cat "$DIR/next-pr" 2>/dev/null || echo 100)"
+  echo $((n + 1)) > "$DIR/state/next-pr"
+  url="https://github.com/$REPO/pull/$n"
+  save_pr "$(jq -nc --argjson n "$n" --arg t "$(opt title)" --arg b "$body" --arg h "$head" --arg base "$base" \
+    --arg u "$url" --argjson d "$(has_opt draft && echo true || echo false)" \
+    --arg oid "$("$GIT" rev-parse --verify -q "$head" 2>/dev/null)" \
+    '{number: $n, title: $t, body: $b, state: "OPEN", isDraft: $d, mergeable: "MERGEABLE", mergeStateStatus: "CLEAN",
+      headRefName: $h, headRefOid: $oid, baseRefName: $base, mergeCommit: null, url: $u}')"
+  start "pr-open:$head"
+  echo "$url"
+}
+
+cmd_pr_merge() {
+  parse "R/repo= s/squash m/merge r/rebase d/delete-branch -/auto -/admin t/subject= b/body= F/body-file= -/match-head-commit=" "$@"
+  local p method head sha n issue verb
+  method=""
+  for n in squash merge rebase; do
+    if has_opt "$n"; then
+      [ -z "$method" ] || die "only one of --merge, --rebase, or --squash can be enabled"
+      method="$n"
+    fi
+  done
+  [ -n "$method" ] || die "--merge, --rebase, or --squash required when not running interactively"
+  p="$(pr_json "$POS1")" || exit 1
+  n="$(jq -r .number <<<"$p")"
+  case "$(jq -r .state <<<"$p")" in
+    MERGED) die "Pull request #$n was already merged" ;;
+    CLOSED) die "Pull request #$n is closed" ;;
+  esac
+  head="$(jq -r .headRefName <<<"$p")"
+  sha=""
+  for id in $(for d in "$DIR"/runs/*/; do basename "$d"; done); do
+    [ -f "$DIR/runs/$id/run.json" ] && [ "$(starts_on "$id")" = "merge:$head" ] && sha="$(jq -r .headSha "$DIR/runs/$id/run.json")"
+  done
+  [ -n "$sha" ] || sha="$(printf '%040d' "$n")"
+  save_pr "$(jq -c --arg sha "$sha" '.state = "MERGED" | .mergeCommit = {oid: $sha}' <<<"$p")"
+  start "merge:$head"
+  # Closing keywords in the body close issues when the PR merges into the default branch.
+  if [ "$(jq -r .baseRefName <<<"$p")" = "$(cat "$DIR/default-branch" 2>/dev/null || echo main)" ]; then
+    for issue in $(jq -r '.body // "" | [scan("(?i)\\b(?:close[sd]?|fix(?:e[sd])?|resolve[sd]?):?\\s+#([0-9]+)")[0]] | .[]' <<<"$p"); do
+      echo "$issue" >> "$DIR/state/closed-issues"
+    done
+  fi
+  case "$method" in
+    squash) verb="Squashed and merged" ;;
+    merge) verb="Merged" ;;
+    rebase) verb="Rebased and merged" ;;
+  esac
+  echo "✓ $verb pull request #$n ($(jq -r .title <<<"$p"))"
+  has_opt delete-branch && echo "✓ Deleted branch $head"
+  return 0
 }
 
 cmd_pr_checks() {
@@ -282,10 +425,20 @@ cmd_pr_checks() {
 }
 
 issues_json() {
+  local closed
+  closed='[]'
+  [ -f "$DIR/state/closed-issues" ] && closed="$(jq -Rsc 'split("\n") | map(select(. != ""))' "$DIR/state/closed-issues")"
   {
     cat "$DIR/issues.json" 2>/dev/null || echo '[]'
     cat "$DIR/state/created-issues.jsonl" 2>/dev/null || true
-  } | jq -sc '(.[0]) + .[1:]'
+  } | jq -sc --argjson closed "$closed" --argjson comments "$(issue_comments)" '(.[0]) + .[1:]
+    | map(if (.number | tostring) as $n | $closed | index($n) then .state = "CLOSED" else . end)
+    | map((.number | tostring) as $n | .comments = ((.comments // []) + [$comments[] | select(.issue == $n) | {body}]))'
+}
+
+# Comments the agent posted, from state/comments.jsonl.
+issue_comments() {
+  if [ -f "$DIR/state/comments.jsonl" ]; then jq -sc . "$DIR/state/comments.jsonl"; else echo '[]'; fi
 }
 
 cmd_issue_list() {
@@ -317,15 +470,50 @@ cmd_issue_create() {
   echo "$url"
 }
 
+cmd_issue_close() {
+  parse "R/repo= c/comment= r/reason=" "$@"
+  local i
+  i="$(issues_json | jq -c --arg n "$POS1" '.[] | select((.number | tostring) == $n)')"
+  [ -n "$i" ] || die "GraphQL: Could not resolve to an issue or pull request with the number of $POS1."
+  if [ "$(jq -r .state <<<"$i")" = CLOSED ]; then
+    echo "! Issue #$POS1 ($(jq -r .title <<<"$i")) is already closed"
+    return 0
+  fi
+  echo "$POS1" >> "$DIR/state/closed-issues"
+  echo "✓ Closed issue #$POS1 ($(jq -r .title <<<"$i"))"
+}
+
+cmd_issue_comment() {
+  parse "R/repo= b/body= F/body-file= e/editor w/web" "$@"
+  reject editor web
+  local body n
+  issues_json | jq -e --arg n "$POS1" 'any(.[]; (.number | tostring) == $n)' >/dev/null \
+    || die "GraphQL: Could not resolve to an issue or pull request with the number of $POS1."
+  if has_opt body-file; then
+    body="$(cat "$(opt body-file)")" || die "could not read $(opt body-file)"
+  else
+    body="$(opt body)"
+  fi
+  [ -n "$body" ] || die "--body or --body-file required when not running interactively"
+  jq -nc --arg i "$POS1" --arg b "$body" '{issue: $i, body: $b}' >> "$DIR/state/comments.jsonl"
+  n="$(grep -c . "$DIR/state/comments.jsonl")"
+  echo "https://github.com/$REPO/issues/$POS1#issuecomment-$((900000 + n))"
+}
+
 case "${1:-} ${2:-}" in
   "run list") shift 2; cmd_run_list "$@" ;;
   "run view") shift 2; cmd_run_view "$@" ;;
   "run watch") shift 2; cmd_run_watch "$@" ;;
+  "pr create") shift 2; cmd_pr_create "$@" ;;
+  "pr list") shift 2; cmd_pr_list "$@" ;;
   "pr view") shift 2; cmd_pr_view "$@" ;;
+  "pr merge") shift 2; cmd_pr_merge "$@" ;;
   "pr checks") shift 2; cmd_pr_checks "$@" ;;
   "issue list") shift 2; cmd_issue_list "$@" ;;
   "issue view") shift 2; cmd_issue_view "$@" ;;
   "issue create") shift 2; cmd_issue_create "$@" ;;
+  "issue close") shift 2; cmd_issue_close "$@" ;;
+  "issue comment") shift 2; cmd_issue_comment "$@" ;;
   "auth status")
     echo "github.com"
     echo "  ✓ Logged in to github.com account fixture-user (stand-in CLI)"

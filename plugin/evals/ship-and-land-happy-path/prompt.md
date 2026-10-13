@@ -1,0 +1,1 @@
+Ship issue #11 from this branch. Once the PR's CI is green you have my go-ahead to squash-merge it into main; I know that deploys notes-api to production. Watch CI and the deploy checking every 5 seconds, and verify it live when it's out.
