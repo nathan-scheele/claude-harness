@@ -17,7 +17,7 @@ The Standards every Harness skill and subagent follows. They come from correctio
 
 ## The Standards
 
-**S1 Live-write gate.** Stop before every Live write and get the operator's explicit go-ahead for that specific action. Approval for one write does not extend to the next, and approval given earlier in a different context does not count. Say exactly what will change, then wait.
+**S1 Live-write gate.** Stop before every Live write and get the operator's explicit go-ahead for that specific action. Approval for one write does not extend to the next, and approval given earlier in a different context does not count. Say exactly what will change, then wait. An advance go-ahead given in this conversation counts only if it names that specific write, accepts its effect and states its condition; post the summary anyway and go ahead only if the facts match. A request to start the work ("ship it", "merge it") is not a go-ahead for the Live writes inside it (ADR 0008).
 
 **S2 Pre-authorized checks.** Run read-only checks on live systems, and any dev or sandbox write, yourself without asking. Never ask the operator to verify something you can verify.
 
