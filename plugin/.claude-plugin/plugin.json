@@ -1,6 +1,6 @@
 {
   "name": "harness",
-  "version": "0.0.1",
+  "version": "0.1.0",
   "description": "Stack-agnostic skills and subagents for shipping, Live writes, monitoring and verification, layered on Matt Pocock's skills.",
   "author": {
     "name": "Nathan Scheele",
