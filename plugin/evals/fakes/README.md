@@ -46,6 +46,10 @@ Graders read `.fake-gh/calls.log` (one `gh <args>` line per call) with a `regex`
 | `default-branch` | The default branch (default `main`): `pr create`'s base, and where a merge closes issues. |
 | `issues.json` | Existing issues for `gh issue list` / `view` (default `[]`). |
 
+### Git in the eval sandbox
+
+On macOS the eval sandbox blocks the Command Line Tools behind `/usr/bin/git`, so plain `git` fails there. A fixture that needs git gives the agent a wrapper for a git that works (`.fake-gh/bin/git` in `plugin/evals/fixtures/ship-and-land-repo.sh`, which fails the case if there is none). Even then, a push that sends new commits to a local bare remote fails, because the receiving side spawns the blocked git; push the branch in the fixture so the agent's push has nothing to send. The live-verifier hook allows `gh` only by its bare name, so live-verifier can't run this fake by path: hand it the acceptance criteria instead.
+
 ### Faked time
 
 Every status read (`run list`, `run view` without a log flag, `pr checks`) advances one shared tick, and each run shows the timeline line for the current tick, staying on its last line once past the end. A run with six timeline lines takes six polls to finish, however long the agent waits between them, so a case can set a short polling interval and still grade several status updates. Log reads don't advance time; asking for logs before a run completes fails as the real CLI does. `run watch` and `pr checks --watch` jump straight to the final state, as a blocking watcher would. The tick counter isn't locked, so two status reads at the same moment (the main session and a subagent polling in parallel) can share or skip a tick; keep polling in one place.
