@@ -8,6 +8,8 @@ HERE="$(cd "$(dirname "$0")" && pwd)"
 CHECK="$HERE/release-check.sh"
 failures=0
 
+CURRENT='# Changelog\n\n## 0.1.0 - 2026-10-13\n\n- Things.\n'
+
 # new_repo <version> <changelog text>
 new_repo() {
   local dir
@@ -35,19 +37,19 @@ expect() {
   rm -rf "$dir"
 }
 
-d="$(new_repo 0.1.0 '# Changelog\n\n## 0.1.0 - 2026-10-13\n\n- Things.\n')"
+d="$(new_repo 0.1.0 "$CURRENT")"
 expect pass "version with a changelog entry passes" "$d"
 
 d="$(new_repo 0.1.0 '# Changelog\n\n## 0.0.1\n\n- Skeleton.\n')"
 expect fail "version missing from changelog fails" "$d"
 
-d="$(new_repo 0.1.0 '# Changelog\n\n## 0.1.0 - 2026-10-13\n\n- Things.\n')"
+d="$(new_repo 0.1.0 "$CURRENT")"
 expect pass "matching tag passes" "$d" v0.1.0
 
-d="$(new_repo 0.1.0 '# Changelog\n\n## 0.1.0 - 2026-10-13\n\n- Things.\n')"
+d="$(new_repo 0.1.0 "$CURRENT")"
 expect fail "tag for another version fails" "$d" v0.2.0
 
-d="$(new_repo 0.1.0 '# Changelog\n\n## 0.1.0 - 2026-10-13\n\n- Things.\n')"
+d="$(new_repo 0.1.0 "$CURRENT")"
 expect fail "tag without the v prefix fails" "$d" 0.1.0
 
 d="$(new_repo 0.1.0 '# Changelog\n\n## 0.1.01\n\n- Typo.\n')"
@@ -66,8 +68,12 @@ expect fail "missing changelog fails" "$d"
 d="$(new_repo '' '# Changelog\n\n## 0.1.0\n')"
 expect fail "missing version fails" "$d"
 
+d="$(new_repo 0.1.0 "$CURRENT")"
+printf '{\n  "name": "harness",\n  "mcpServers": {\n    "x": { "version": "9.9.9" }\n  },\n  "version": "0.1.0"\n}\n' > "$d/plugin/.claude-plugin/plugin.json"
+expect pass "a nested version key is ignored" "$d"
+
 if [[ $failures -gt 0 ]]; then
-  echo "$failures failing"
+  echo "$failures release-check test(s) failed"
   exit 1
 fi
-echo "all passing"
+echo "all release-check tests passed"

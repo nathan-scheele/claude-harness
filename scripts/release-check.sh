@@ -11,7 +11,8 @@ TAG="${2:-}"
 MANIFEST="$ROOT/plugin/.claude-plugin/plugin.json"
 CHANGELOG="$ROOT/CHANGELOG.md"
 
-version="$(sed -n 's/^[[:space:]]*"version":[[:space:]]*"\([^"]*\)".*/\1/p' "$MANIFEST" | head -n 1)"
+# Top-level keys are indented two spaces; deeper "version" keys are ignored.
+version="$(sed -n 's/^  "version":[[:space:]]*"\([^"]*\)".*/\1/p' "$MANIFEST" | head -n 1)"
 if [[ -z "$version" ]]; then
   echo "release-check: no version in $MANIFEST" >&2
   exit 1

@@ -43,9 +43,15 @@ Pages always open in the background (a hook denies any other kind), so the brows
 
 ## Upgrade notes
 
-Update both plugins with `claude plugin marketplace update` then `claude plugin update harness@harness` (and `mattpocock-skills@mattpocock`), and restart Claude Code.
+To update both plugins, run these, then restart Claude Code:
 
-- **0.1.0: `CONTEXT.md` is now `GLOSSARY.md`.** Current versions of the Base layer name the per-repo domain doc `GLOSSARY.md` instead of `CONTEXT.md`, and the Harness follows them. In repos set up with an older version, rename `CONTEXT.md` to `GLOSSARY.md` (and any `CONTEXT-MAP.md` to `GLOSSARY-MAP.md`) so their skills find it.
+```
+claude plugin marketplace update
+claude plugin update harness@harness
+claude plugin update mattpocock-skills@mattpocock
+```
+
+- **From 0.1.0: rename `CONTEXT.md` to `GLOSSARY.md`.** This comes from the Base layer, not a Harness change: its current versions name the per-repo domain doc `GLOSSARY.md` instead of `CONTEXT.md`. In repos set up with an older Base layer, rename `CONTEXT.md` to `GLOSSARY.md` (and any `CONTEXT-MAP.md` to `GLOSSARY-MAP.md`) so its skills find it.
 
 ## What's in it
 
