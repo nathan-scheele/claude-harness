@@ -154,7 +154,8 @@ cat > .fake-gh/runs/2001/timeline.jsonl <<JSONL
 {"status": "completed", "conclusion": "failure", "jobs": [$L_OK, $T_FAIL]}
 JSONL
 # What --log-failed prints: every line of each failed step, prefixed with job,
-# step and timestamp, as the real CLI does.
+# step and timestamp, as the real CLI does. The delegates-before-reading-logs
+# grader finds log text in the trace by these timestamps.
 {
   printf 'test\tRun tests\t2026-01-01T10:02:11.0000000Z > notes-api@0.9.1 test\n'
   printf 'test\tRun tests\t2026-01-01T10:02:11.1000000Z > node --test --experimental-test-coverage\n'
