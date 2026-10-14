@@ -31,7 +31,7 @@ Keep two kinds of value apart: **detected** (read straight from the repo or host
 
 ### 2. Ask only for what's missing
 
-Every section of [project-config.md](project-config.md) needs a value or `none`. List what is still unknown after step 1 and ask for exactly those, never for a value you detected. Lead with a short summary of what you detected, one line per value, so the operator sees why those aren't asked.
+Every section of [project-config.md](project-config.md) needs a value or `none`. List what is still unknown after step 1 and ask for exactly those, never for a value you detected. Lead with a short summary of what you detected, one line per value, so the operator sees why those aren't asked. Keep the summary and the questions in one message: if you need to load the question tool, load it before posting the summary.
 
 Ask per S4, grouping related values (up to four questions per AskUserQuestion call). The recommended option is the likely answer where one exists (the current branch as default branch, `Closes #<n>` as the close convention on GitHub); offer an explicit `none` wherever the repo may genuinely have none. If the operator doesn't know a value, record it as `unset`.
 
@@ -41,7 +41,7 @@ If the host is not GitHub, record it as found and say once that Harness shipping
 
 Show the complete document exactly as it will be written, in one fenced markdown block, using the section names and order of [project-config.md](project-config.md) and its `**Key**: value` lines. Below it, list what came from where (detected, inferred, answered) and, on a re-run, what changed from the existing file.
 
-Then ask whether to write it (S4: "Write it" recommended, or "Change something"), and stop. Apply corrections and preview again until the operator confirms. If the operator's request already said to write once shown, and nothing is still unknown or inferred-but-unconfirmed, show the preview and write without stopping.
+Then ask whether to write it (S4: "Write it" recommended, or "Change something"), and stop. Keep the preview and the ask in one message, with the ask last, after the list of sources: a message that ends on notes reads as done, not as a question. If you need to load the question tool first, load it before posting the preview, not between the two. Apply corrections and preview again until the operator confirms. If the operator's request already said to write once shown, and nothing is still unknown or inferred-but-unconfirmed, post the preview as a message first, then write without stopping: the operator must see it before the file changes.
 
 ### 4. Write
 
