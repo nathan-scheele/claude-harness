@@ -4,7 +4,7 @@ The Harness: a Claude Code plugin of stack-agnostic skills and subagents for the
 
 It installs as the plugin `harness`, so its skills live under the `harness:` namespace (e.g. `/harness:standards`). Claude Code reserves plugin names starting with `claude-`, so the plugin can't share the repo's name.
 
-**Status:** walking skeleton. Ships the Standards skill; the workflow skills and subagents land in 0.1 and 0.2.
+**Status:** 0.1, the daily delivery loop: setup, shipping, Live writes, monitoring, live verification and session close-out. The rest of the workflow skills and subagents land in 0.2. Changes are in [CHANGELOG.md](CHANGELOG.md).
 
 ## Install
 
@@ -19,7 +19,7 @@ claude plugin install mattpocock-skills@mattpocock
 
 If you already have them from another marketplace (for example the official one, which can lag behind), uninstall that copy first so the two don't shadow each other.
 
-**Upgrade note:** current versions of the Base layer name the per-repo domain doc `GLOSSARY.md` instead of `CONTEXT.md`. In repos set up with an older version, rename `CONTEXT.md` to `GLOSSARY.md` (and any `CONTEXT-MAP.md` to `GLOSSARY-MAP.md`) so its skills find it.
+Repos set up with an older Base layer need a rename first: see [Upgrade notes](#upgrade-notes).
 
 ### 2. The Harness
 
@@ -40,6 +40,12 @@ Sign it in to the accounts verification needs (your app's dev and live sites, ve
 Sign-ins persist in the profile. If one expires, `harness:live-verifier` lists signing in again as a step for you instead of failing the check.
 
 Pages always open in the background (a hook denies any other kind), so the browser doesn't take your focus once it's running (Chrome shows its own window the first time a session uses it). The profile can be open in only one Chrome at a time: if another session is already using the Harness browser, live-verifier reports it as blocked rather than taking that browser over.
+
+## Upgrade notes
+
+Update both plugins with `claude plugin marketplace update` then `claude plugin update harness@harness` (and `mattpocock-skills@mattpocock`), and restart Claude Code.
+
+- **0.1.0: `CONTEXT.md` is now `GLOSSARY.md`.** Current versions of the Base layer name the per-repo domain doc `GLOSSARY.md` instead of `CONTEXT.md`, and the Harness follows them. In repos set up with an older version, rename `CONTEXT.md` to `GLOSSARY.md` (and any `CONTEXT-MAP.md` to `GLOSSARY-MAP.md`) so their skills find it.
 
 ## What's in it
 
@@ -66,11 +72,13 @@ scripts/test-leak-check.sh               # leak-check tests
 scripts/test-setup-detect.sh             # setup-harness detector tests
 scripts/test-fake-gh.sh                  # fake gh used by eval fixtures (plugin/evals/fakes)
 scripts/test-guard.sh                    # hook tests: live-verifier read-only Bash, background pages (needs node)
+scripts/test-release-check.sh            # release-check tests
+scripts/release-check.sh . v0.1.0        # before tagging: plugin version is the newest CHANGELOG entry and matches the tag
 scripts/leak-check.sh .                  # fail on emails, home paths, store domains, theme IDs, account subdomains, chat and resource IDs
 scripts/run-evals.sh                     # behavioural evals vs a no-plugin baseline (uses your Claude credentials)
 ```
 
-CI runs strict validation and the leak check on every push and PR. Private identifiers the leak check must catch but this public repo must not contain (a work domain, a store name) go in the `LEAK_PATTERNS` repository secret, one extended regex per line.
+CI runs strict validation, the leak check and the release check (without a tag) on every push and PR. Private identifiers the leak check must catch but this public repo must not contain (a work domain, a store name) go in the `LEAK_PATTERNS` repository secret, one extended regex per line.
 
 Evals live in `plugin/evals/<case>/`. Each case builds a fixture repo with its scaffold script and runs once with the plugin and once without; `run-evals.sh` fails unless every case passes and the plugin beats the baseline. Eval runs are headless, so the structured question tool (AskUserQuestion) isn't available in them; cases assert the Standards' headless fallback instead. Fixture builders shared by several cases live in `plugin/evals/fixtures/`; external systems are fakes inside the fixture that log their calls (the gated-write cases' `bin/notes-db` data connector), so graders check what was actually called and in what order. Stand-ins for CLIs several skills use live in `plugin/evals/fakes/` (a fake `gh` that replays canned CI, PR and issue states and records every call); fixtures install them, as its README describes. Plugin MCP servers never start in eval runs; cases answer their tools from mocks in `<case>/mocks/<server>/` (the live-verifier cases mock the Harness browser as `browser/`).
 
