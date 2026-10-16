@@ -70,6 +70,15 @@ Give a short list: what landed (with PR, SHA or deploy evidence and a link, S5),
 - **Safe to clear: yes.** Everything is landed or recorded and nothing the session started is still running.
 - **Safe to clear: no.** Name each blocker and what would clear it (commit and push, open a PR, merge, record it, wait for the deploy). Offer to do the parts that aren't Live writes, then stop and wait. Don't remove the worktree or give a priming prompt yet; run close-session again once the blockers are cleared.
 
+**Retro.** Then look back over the conversation for moments where the session struggled:
+
+- The operator corrected you, undid your work, or had to repeat an instruction.
+- A test, check, CI run or review caught a mistake you made.
+- Finding a file or fact took many searches.
+- You needed information you couldn't reach (a log, a service, a dashboard) and had to ask or guess.
+
+If you find any, name up to three, one line each (what happened, and when), and suggest the operator run the Base layer's `/retro` before clearing, while this session is still in context. Only the operator can invoke it. It proposes changes to the repo's environment (checks, pointers, standards); if they apply any, that is new work, so run close-session again afterwards. If the session went smoothly, or `/retro` already ran in it, say nothing about it: a smooth session has little to teach.
+
 ## 6. Remove the worktree (only when safe)
 
 If the session runs in a worktree it created for this work:
