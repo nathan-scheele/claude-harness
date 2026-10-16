@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Same repo as close-session-clean: the feature branch was pushed and
-# squash-merged, so closing out is "safe to clear".
+# The shared landed fixture (../fixtures/close-session-landed-repo.sh): the
+# feature branch was pushed and squash-merged, so closing out is "safe to clear".
 set -euo pipefail
-bash "$(dirname "$0")/../close-session-clean/fixture-repo.sh"
+bash "$(dirname "$0")/../fixtures/close-session-landed-repo.sh"

@@ -5,7 +5,8 @@ description: >
   struggles, since an eval can't carry an earlier conversation). Everything
   has landed, as in close-session-clean, so the verdict is still "safe to
   clear", and the agent also names the struggles and suggests the operator run
-  the Base layer's /retro before clearing.
+  the Base layer's /retro before clearing, as a suggestion rather than a stop:
+  the priming prompt still follows.
 tags: [close-session]
 runs: 3
 execution:

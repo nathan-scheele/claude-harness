@@ -70,16 +70,18 @@ Give a short list: what landed (with PR, SHA or deploy evidence and a link, S5),
 - **Safe to clear: yes.** Everything is landed or recorded and nothing the session started is still running.
 - **Safe to clear: no.** Name each blocker and what would clear it (commit and push, open a PR, merge, record it, wait for the deploy). Offer to do the parts that aren't Live writes, then stop and wait. Don't remove the worktree or give a priming prompt yet; run close-session again once the blockers are cleared.
 
-**Retro.** Then look back over the conversation for moments where the session struggled:
+## 6. Retro check (only when safe)
+
+Skip this step if `/retro` already ran in this session. Otherwise look back over the conversation for moments where the session struggled:
 
 - The operator corrected you, undid your work, or had to repeat an instruction.
 - A test, check, CI run or review caught a mistake you made.
-- Finding a file or fact took many searches.
+- Finding a file or fact took three or more searches.
 - You needed information you couldn't reach (a log, a service, a dashboard) and had to ask or guess.
 
-If you find any, name up to three, one line each (what happened, and when), and suggest the operator run the Base layer's `/retro` before clearing, while this session is still in context. Only the operator can invoke it. It proposes changes to the repo's environment (checks, pointers, standards); if they apply any, that is new work, so run close-session again afterwards. If the session went smoothly, or `/retro` already ran in it, say nothing about it: a smooth session has little to teach.
+If you find any, name up to three, one line each (what happened, and when), and suggest the operator run the Base layer's `/retro` before clearing, while this session is still in context. Only the operator can invoke it. Its changes are new work: make them on a new branch off `<default>`, not the branch that just landed, then run close-session again. Carry on with the next steps either way; this is a suggestion, not a stop. If `/retro` isn't installed (the Base layer added it in 1.3.0), record the struggles in the tracker as in step 4 instead.
 
-## 6. Remove the worktree (only when safe)
+## 7. Remove the worktree (only when safe)
 
 If the session runs in a worktree it created for this work:
 
@@ -89,7 +91,7 @@ If the session runs in a worktree it created for this work:
 
 Not in a worktree: leave the checkout as it is and say so.
 
-## 7. Priming prompt
+## 8. Priming prompt
 
 When the verdict is yes, end with a priming prompt in a fenced code block: one paste-ready message that starts the next session with the right context. It must stand on its own for a fresh session that has none of this conversation:
 
@@ -101,4 +103,4 @@ When the verdict is yes, end with a priming prompt in a fenced code block: one p
 
 Write the prompt yourself. If the next session needs more than a prompt can carry, suggest the operator run the Base layer's `/handoff` if it is installed (only the operator can invoke it) and reference the document it writes; if it isn't, put the extra detail in the tracker in step 4 and link it.
 
-Close with one line: what was removed or kept, and that the session is safe to clear.
+Close with one line: what was removed or kept, and that the session is safe to clear (after `/retro`, if step 6 suggested it).
