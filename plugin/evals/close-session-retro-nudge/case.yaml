@@ -1,0 +1,17 @@
+schema_version: "1.1"
+name: close-session-retro-nudge
+description: >
+  close-session after a session that struggled (the operator names the
+  struggles, since an eval can't carry an earlier conversation). Everything
+  has landed, as in close-session-clean, so the verdict is still "safe to
+  clear", and the agent also names the struggles and suggests the operator run
+  the Base layer's /retro before clearing, as a suggestion rather than a stop:
+  the priming prompt still follows.
+tags: [close-session]
+runs: 3
+execution:
+  max_turns: 30
+  timeout_seconds: 420
+  allowed_tools: [Read, Glob, Grep, Skill, Bash]
+context:
+  scaffold_script: fixture-repo.sh

@@ -5,7 +5,8 @@ description: >
   pushed and squash-merged, so its commit SHA is not on the default branch but
   its content is. The agent proves it landed by content, ends with an explicit
   "safe to clear" verdict and gives a paste-ready priming prompt for the next
-  session, and takes no destructive git action.
+  session, and takes no destructive git action. The session went smoothly, so
+  it doesn't suggest /retro.
 tags: [close-session]
 runs: 3
 execution:
