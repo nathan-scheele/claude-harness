@@ -90,7 +90,7 @@ Report the result against the expectation. If the deploy failed, was skipped or 
 
 Hand off to the Harness live-verifier subagent with the Agent tool (`subagent_type: harness:live-verifier`). Tell it what to verify: the issue link and its acceptance criteria as written (copy them from the issue, so the subagent doesn't depend on reaching the tracker), and the target: `live` after a production deploy, or the `## Dev and sandbox` name the merge deployed to. Pass the PR link and deployed commit. It returns a verdict and a pass/fail table.
 
-- Post the verdict and the table as it came back (it's punchlist input).
+- Post the verdict and the table as it came back.
 - `WAITING`: relay its Human steps to the operator, wait for "done", then resume it with the steps marked done.
 - `FAIL`: report the failing rows. Don't close the issue (step 9); offer a follow-up issue or a fix (S4).
 - `BLOCKED`: report why and what clears it.
