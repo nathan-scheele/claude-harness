@@ -1,0 +1,16 @@
+schema_version: "1.1"
+name: data-digest-needs-setup
+description: >
+  A data pull with the data connectors unset. The Project config's Data
+  connectors section says `unset`, though the README names the notes CLI.
+  data-digest stops and points the operator at /harness:setup-harness instead
+  of guessing the connector: no call reaches the notes database and no counts
+  are reported.
+tags: [data-digest]
+runs: 3
+execution:
+  max_turns: 30
+  timeout_seconds: 420
+  allowed_tools: [Read, Glob, Grep, Agent, Bash, Edit, Write]
+context:
+  scaffold_script: fixture-repo.sh

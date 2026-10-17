@@ -1,8 +1,8 @@
 #!/usr/bin/env bash
-# Tests for plugin/hooks/guard.sh, the PreToolUse hook that keeps the
-# live-verifier subagent's Bash read-only and keeps every Harness browser page
-# in the background. Each case feeds the hook a PreToolUse input and asserts it
-# allows (no output) or denies (a deny decision).
+# Tests for plugin/hooks/guard.sh, the PreToolUse hook that keeps the read-only
+# subagents (live-verifier, data-digest) read-only and keeps every Harness
+# browser page in the background. Each case feeds the hook a PreToolUse input
+# and asserts it allows (no output) or denies (a deny decision).
 # Needs node, like the hook itself.
 set -uo pipefail
 
@@ -10,7 +10,8 @@ HERE="$(cd "$(dirname "$0")" && pwd)"
 GUARD="$HERE/../plugin/hooks/guard.sh"
 failures=0
 
-# A repo whose Project config names a fixture reset command and a read-only CLI.
+# A repo whose Project config names a fixture reset command, read-only
+# connectors (a CLI and an MCP server) and read-write ones, two with listed reads.
 REPO="$(mktemp -d)"
 trap 'rm -rf "$REPO"' EXIT
 mkdir -p "$REPO/docs/agents"
@@ -26,6 +27,9 @@ cat > "$REPO/docs/agents/harness.md" <<'MD'
 
 - **Analytics warehouse**: CLI `warehouse query`; read-only
 - **Orders DB**: CLI `orders-admin`; read-write
+- **Notes database**: CLI `bin/notes-db` (production by default); read-write; reads: `list`, `get`
+- **Metrics**: MCP server `metrics`; read-only
+- **CRM**: MCP server `claude_ai_Crm`; read-write; reads: `get_contact`, `list_contacts`
 MD
 BARE="$(mktemp -d)"
 trap 'rm -rf "$REPO" "$BARE"' EXIT
@@ -108,6 +112,22 @@ expect allow 'warehouse query "select count(*) from notes"'
 expect deny 'orders-admin list'
 expect deny 'npm run fixtures:reset' 'harness:live-verifier' "$BARE"
 expect deny 'npm run fixtures:reset && npm run deploy'
+expect allow 'bin/notes-db list --status active'
+expect allow 'bin/notes-db get n01 n02 | wc -l'
+expect deny 'bin/notes-db set-status archived n01'
+expect deny 'bin/notes-db list; bin/notes-db set-status archived n01'
+expect deny 'bin/notes-dbx list'
+expect deny 'cd /tmp/elsewhere && bin/notes-db list'
+expect allow 'cd src && warehouse query "select 1"'
+
+echo "# data-digest: reads through connectors, no fixture reset"
+expect deny 'npm run fixtures:reset' 'harness:data-digest'
+expect allow 'warehouse query "select count(*) from notes"' 'harness:data-digest'
+expect allow 'bin/notes-db list --edited-before 2024-01-01 | wc -l' 'harness:data-digest'
+expect deny 'bin/notes-db set-status archived n01 --dry-run' 'harness:data-digest'
+expect deny 'orders-admin list' 'harness:data-digest'
+expect allow 'jq -r ".[] | .id" extracts/notes.json | sort | uniq -c' 'harness:data-digest'
+expect deny 'bin/notes-db list' 'harness:data-digest' "$BARE"
 
 echo "# writes to the repo or disk"
 expect deny 'rm -rf build'
@@ -130,6 +150,8 @@ expect deny 'git branch -D old'
 expect deny 'git config user.name x'
 expect deny 'git stash drop'
 expect deny 'rm -rf build' 'live-verifier'
+expect deny 'rm -rf build' 'harness:data-digest'
+expect deny 'echo hi > notes.txt' 'data-digest'
 
 echo "# writes to remote systems"
 expect deny 'git push origin main'
@@ -187,12 +209,11 @@ else
   failures=$((failures + 1))
 fi
 
-echo "# Harness browser pages stay in the background, for every agent"
-# expect_browser <allow|deny> <tool> <tool_input json> [agent_type]
-expect_browser() {
-  local want="$1" tool="$2" json="$3" agent="${4-}"
+# expect_tool <allow|deny> <tool_name> <tool_input json> [agent_type] [cwd]
+expect_tool() {
+  local want="$1" tool="$2" json="$3" agent="${4-}" cwd="${5:-$REPO}"
   local input out got
-  input="{\"hook_event_name\":\"PreToolUse\",\"tool_name\":\"mcp__plugin_harness_browser__$tool\",\"tool_input\":$json${agent:+,\"agent_type\":\"$agent\"}}"
+  input="{\"hook_event_name\":\"PreToolUse\",\"tool_name\":\"$tool\",\"tool_input\":$json,\"cwd\":\"$cwd\"${agent:+,\"agent_type\":\"$agent\"}}"
   out="$(printf '%s' "$input" | "$GUARD" 2>&1)"
   if [[ -z "$out" ]]; then
     got=allow
@@ -209,6 +230,51 @@ expect_browser() {
     failures=$((failures + 1))
   fi
 }
+
+echo "# data-digest calls only Project config connector servers"
+expect_tool allow mcp__metrics__run_query '{"sql":"select 1"}' 'harness:data-digest'
+expect_tool allow mcp__claude_ai_Crm__get_contact '{"id":"1"}' 'harness:data-digest'
+expect_tool allow mcp__claude_ai_Crm__list_contacts '{}' 'data-digest'
+expect_tool deny mcp__claude_ai_Crm__update_contact '{"id":"1"}' 'harness:data-digest'
+expect_tool deny mcp__claude_ai_Crm__get_contact_x '{}' 'harness:data-digest'
+expect_tool deny mcp__claude_ai_Crmx__get_contact '{}' 'harness:data-digest'
+expect_tool deny mcp__tracker__list_issues '{}' 'harness:data-digest'
+expect_tool deny mcp__plugin_harness_browser__navigate_page '{"url":"https://example.com"}' 'harness:data-digest'
+expect_tool deny mcp__metrics__run_query '{}' 'harness:data-digest' "$BARE"
+expect_tool allow mcp__tracker__close_issue '{}' ''
+expect_tool allow mcp__tracker__close_issue '{}' 'Explore'
+
+echo "# data-digest writes only new data extracts"
+mkdir -p "$REPO/data" && : > "$REPO/data/existing.csv"
+expect_tool allow Write "{\"file_path\":\"$REPO/extracts/stale-notes.csv\",\"content\":\"id\\n\"}" 'harness:data-digest'
+expect_tool allow Write "{\"file_path\":\"$BARE/orders.json\",\"content\":\"[]\"}" 'harness:data-digest'
+expect_tool allow Write '{"file_path":"extracts/notes.jsonl","content":""}' 'harness:data-digest'
+expect_tool deny Write "{\"file_path\":\"$REPO/data/existing.csv\",\"content\":\"\"}" 'harness:data-digest'
+expect_tool deny Write "{\"file_path\":\"$REPO/docs/agents/harness.md\",\"content\":\"\"}" 'harness:data-digest'
+expect_tool deny Write "{\"file_path\":\"$REPO/src/report.js\",\"content\":\"\"}" 'harness:data-digest'
+expect_tool deny Write "{\"file_path\":\"$REPO/.claude/settings.json\",\"content\":\"{}\"}" 'harness:data-digest'
+expect_tool deny Write "{\"file_path\":\"$REPO/extracts/../.git/x.json\",\"content\":\"\"}" 'harness:data-digest'
+expect_tool deny Write '{"content":"x"}' 'harness:data-digest'
+expect_tool deny Edit "{\"file_path\":\"$REPO/extracts/new.csv\",\"old_string\":\"a\",\"new_string\":\"b\"}" 'harness:data-digest'
+expect_tool deny NotebookEdit "{\"notebook_path\":\"$REPO/a.ipynb\",\"new_source\":\"\"}" 'harness:data-digest'
+expect_tool allow Write "{\"file_path\":\"$REPO/docs/agents/harness.md\",\"content\":\"\"}" ''
+expect_tool allow Write "{\"file_path\":\"$REPO/docs/agents/harness.md\",\"content\":\"\"}" 'harness:live-verifier'
+
+echo "# data-digest: any other tool must be on its read-only list"
+expect_tool allow Read "{\"file_path\":\"$REPO/docs/agents/harness.md\"}" 'harness:data-digest'
+expect_tool allow Grep '{"pattern":"Reset"}' 'harness:data-digest'
+expect_tool allow ToolSearch '{"query":"select:mcp__metrics__run_query"}' 'harness:data-digest'
+expect_tool allow WebFetch '{"url":"https://docs.example.com/api"}' 'harness:data-digest'
+expect_tool deny Artifact '{"file_path":"report.html"}' 'harness:data-digest'
+expect_tool deny SendMessage '{"to":"lead","message":"hi"}' 'harness:data-digest'
+expect_tool deny CronCreate '{"cron":"* * * * *","prompt":"x"}' 'harness:data-digest'
+expect_tool deny Agent '{"prompt":"x"}' 'harness:data-digest'
+expect_tool allow Artifact '{"file_path":"report.html"}' ''
+expect_tool allow SendMessage '{"to":"lead","message":"hi"}' 'harness:live-verifier'
+
+echo "# Harness browser pages stay in the background, for every agent"
+# expect_browser <allow|deny> <page tool> <tool_input json> [agent_type]
+expect_browser() { expect_tool "$1" "mcp__plugin_harness_browser__$2" "$3" "${4-}"; }
 expect_browser allow new_page '{"url":"https://dev.example.com","background":true}' 'harness:live-verifier'
 expect_browser allow new_page '{"url":"https://dev.example.com","background":true}'
 expect_browser deny new_page '{"url":"https://dev.example.com"}' 'harness:live-verifier'

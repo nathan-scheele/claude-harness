@@ -1,9 +1,9 @@
 {
-  "description": "Keeps the live-verifier subagent's Bash read-only, and keeps every Harness browser page in the background.",
+  "description": "Keeps the read-only subagents (live-verifier, data-digest) read-only, and keeps every Harness browser page in the background.",
   "hooks": {
     "PreToolUse": [
       {
-        "matcher": "Bash|mcp__plugin_harness_browser__new_page|mcp__plugin_harness_browser__select_page",
+        "matcher": "*",
         "hooks": [
           {
             "type": "command",
