@@ -78,6 +78,8 @@ flag_list() {
 }
 
 opt() { printf '%s' "$OPTS" | awk -F'\t' -v k="$1" '$1 == k { v = $2 } END { print v }'; }
+# opt_all <long>: every value given for a repeatable flag, one per line.
+opt_all() { printf '%s' "$OPTS" | awk -F'\t' -v k="$1" '$1 == k { print $2 }'; }
 has_opt() {
   case "
 $OPTS" in *"
@@ -478,7 +480,18 @@ issue_comments() {
 cmd_issue_list() {
   parse "R/repo= q/jq= -/json= S/search= s/state= l/label= a/assignee= A/author= L/limit= m/milestone= -/app=" "$@"
   local i
-  i="$(issues_json)" || exit 1
+  case "$(opt state)" in
+    '' | open | closed | all) ;;
+    *) die "invalid argument \"$(opt state)\" for \"-s, --state\" flag: valid values are {open|closed|all}" ;;
+  esac
+  # Repeated or comma-separated labels must all be on the issue, ignoring case;
+  # newest first, as gh lists them.
+  i="$(issues_json | jq -c --arg s "$(opt state)" --arg l "$(opt_all label | tr '\n' ',')" --arg lim "$(opt limit)" '
+    ($s | ascii_upcase) as $st
+    | ($l | ascii_downcase | split(",") | map(select(. != ""))) as $want
+    | map(select(if $st == "ALL" then true elif $st == "" then .state == "OPEN" else .state == $st end)
+      | select(([(.labels // [])[].name | ascii_downcase]) as $have | all($want[]; . as $w | $have | index([$w]))))
+    | sort_by(-.number) | .[:(if $lim == "" then 30 else ($lim | tonumber) end)]')" || exit 1
   show "$i" '.[] | [(.number | tostring), .state, .title] | @tsv'
 }
 
