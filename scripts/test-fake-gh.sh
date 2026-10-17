@@ -161,6 +161,49 @@ fake "$d" issue create --body "no title"
 ok_if "issue create without a title exits non-zero" test "$code" -ne 0
 rm -rf "$d"
 
+# --- issue list filters ---
+
+# new_issue_scenario: open and closed issues with labels, one with a native
+# blocked-by link.
+new_issue_scenario() {
+  local dir
+  dir="$(new_scenario)"
+  cat > "$dir/issues.json" <<'JSON'
+[{"number": 30, "title": "Tags spec", "state": "OPEN", "labels": [{"name": "tags-v2"}]},
+ {"number": 31, "title": "Lowercase tags", "state": "CLOSED", "labels": [{"name": "tags-v2"}, {"name": "ready-for-agent"}]},
+ {"number": 32, "title": "Tag search", "state": "OPEN", "labels": [{"name": "tags-v2"}, {"name": "ready-for-agent"}],
+  "blockedBy": {"nodes": [{"number": 31, "state": "CLOSED"}], "totalCount": 1}},
+ {"number": 33, "title": "Billing export", "state": "OPEN", "labels": [{"name": "ready-for-agent"}]},
+ {"number": 34, "title": "No labels", "state": "OPEN"}]
+JSON
+  echo "$dir"
+}
+
+d="$(new_issue_scenario)"
+fake "$d" issue list --json number --jq '[.[].number] | join(" ")'
+ok_if "issue list shows only open issues, newest first" test "$out" = "34 33 32 30"
+fake "$d" issue list --state closed --json number --jq '[.[].number] | join(" ")'
+ok_if "issue list --state closed" test "$out" = "31"
+fake "$d" issue list -s all --json number --jq '[.[].number] | join(" ")'
+ok_if "issue list -s all" test "$out" = "34 33 32 31 30"
+fake "$d" issue list --state merged --json number
+ok_if "issue list with an invalid --state exits non-zero" test "$code" -ne 0
+fake "$d" issue list --label tags-v2 --json number --jq '[.[].number] | join(" ")'
+ok_if "issue list --label keeps issues with that label" test "$out" = "32 30"
+fake "$d" issue list -l tags-v2 -l ready-for-agent --json number --jq '[.[].number] | join(" ")'
+ok_if "repeated --label: every label must match" test "$out" = "32"
+fake "$d" issue list --label "tags-v2,ready-for-agent" --state all --json number --jq '[.[].number] | join(" ")'
+ok_if "comma-separated --label: every label must match" test "$out" = "32 31"
+fake "$d" issue list --label TAGS-V2 --json number --jq '[.[].number] | join(" ")'
+ok_if "--label matches case-insensitively" test "$out" = "32 30"
+fake "$d" issue list -L 2 --json number --jq '[.[].number] | join(" ")'
+ok_if "issue list --limit keeps the newest" test "$out" = "34 33"
+fake "$d" issue list --label tags-v2 --json number,blockedBy --jq '[.[] | "\(.number)<\(.blockedBy.nodes // [] | map("\(.number):\(.state)") | join(","))"] | join(" ")'
+ok_if "issue list --json blockedBy passes native blocked-by links through" test "$out" = "32<31:CLOSED 30<"
+fake "$d" issue view 32 --json blockedBy --jq '.blockedBy.totalCount'
+ok_if "issue view --json blockedBy" test "$out" = "1"
+rm -rf "$d"
+
 # --- job-scoped logs ---
 
 d="$(new_scenario)"
