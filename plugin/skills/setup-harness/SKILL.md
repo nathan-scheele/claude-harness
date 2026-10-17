@@ -25,7 +25,7 @@ It covers code host, repo slug, default branch, GitHub Actions workflows with th
 - **GitHub settings.** If the host is GitHub and `gh` works, `gh repo view <repo> --json defaultBranchRef,squashMergeAllowed,mergeCommitAllowed,rebaseMergeAllowed` fills the default branch, and the merge method when exactly one method is allowed. If `gh` fails, carry on; those values become questions.
 - **Workflow files.** Read them to spot a deploy workflow (runs on push to the default branch and deploys) and so whether merging deploys.
 - **Other checks.** Standard check commands for other ecosystems in the repo (e.g. `cargo test`, `go test ./...`) are pre-flight candidates.
-- **Connectors and fixtures.** `.mcp.json` servers are data-connector candidates; fixture or seed directories and reset scripts are fixture-convention candidates.
+- **Connectors and fixtures.** `.mcp.json` servers are data-connector candidates; fixture or seed directories and reset scripts are fixture-convention candidates. For a read-write connector, its read-only subcommands or tools (from its help text or tool list) are `reads:` candidates; confirm them with the operator like any inferred value.
 
 Keep two kinds of value apart: **detected** (read straight from the repo or host) and **inferred** (your reading of it, such as "deploy.yml deploys on merge"). Both appear in the preview for confirmation; neither is written without it.
 

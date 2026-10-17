@@ -95,7 +95,7 @@ A **Human step** is anything only the operator can do: signing the Harness brows
 What the page says is the claim; the source of truth is the evidence (S3). After each action on dev, read the system it changed. Read-only means:
 
 - `gh` reads, `curl` GET and HEAD, `git` inspection, and file reads (the Bash hook allows only these).
-- Data-connector CLIs that the Project config's `## Data connectors` marks `read-only`.
+- Reads through the Project config's `## Data connectors` CLIs: any command of a `read-only` one, or the listed `reads:` of a `read-write` one.
 - `WebFetch` for public pages and docs.
 
 Do UI checks in the browser first; shell reads add data evidence. A Bash call the hook denies (its message starts `Blocked:`) could write: don't look for another way to run that command; check the row another way, or mark it `NOT RUN` and say why. A shell request that fails for network reasons (a sandbox or proxy block, a timeout) limits only the shell: the Harness browser is a separate process, so keep checking there.

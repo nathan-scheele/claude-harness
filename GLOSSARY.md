@@ -20,6 +20,10 @@ _Avoid_: repo skill, local harness
 The single per-repo document `docs/agents/harness.md`, written by the setup skill, that holds the values the Harness reads in that repo (repo slug, CI job names, deploy URL, dev targets, fixtures).
 _Avoid_: settings, harness config
 
+**Data connector**:
+An MCP server or CLI listed in the Project config's `## Data connectors` through which Harness skills and subagents read a system's data in bulk or write to it, marked read-only or read-write, with the reads a read-only subagent may use.
+_Avoid_: data source, integration
+
 **Live write**:
 An action that changes something real people or production depend on (a merge or push that deploys, a production data write, an outbound message someone else will read), and so needs the operator's explicit go-ahead for that specific action. Writes to dev, sandbox or preview environments and the operator's own issue tracker are not Live writes.
 _Avoid_: prod change, destructive action, risky write

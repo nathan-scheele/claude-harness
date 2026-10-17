@@ -26,7 +26,8 @@
     "./skills/ship-and-land"
   ],
   "agents": [
-    "./agents/live-verifier.md"
+    "./agents/live-verifier.md",
+    "./agents/data-digest.md"
   ],
   "mcpServers": {
     "browser": {

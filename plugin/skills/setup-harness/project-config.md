@@ -46,9 +46,9 @@ Targets where writes are pre-authorized (S2). Anything not listed here is treate
 
 ## Data connectors
 
-Systems Harness skills reach for bulk data reads and production data writes, and how.
+Systems Harness skills reach for bulk data reads and production data writes, and how. An MCP server is named as in its tool names (`mcp__<name>__<tool>`). The read-only subagents (data-digest, live-verifier) may use any command or tool of a read-only connector, but only the `reads:` listed for a read-write one: its read-only subcommands (the words after the command) or tool names.
 
-- **{system}**: {MCP server `name` | CLI `command`}; {read-only | read-write}
+- **{system}**: {MCP server `name` | CLI `command`}; {read-only | read-write}[; reads: `{subcommand or tool}`, `{subcommand or tool}`]
 
 ## Issues
 

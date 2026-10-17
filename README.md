@@ -64,6 +64,7 @@ claude plugin update mattpocock-skills@mattpocock
 | `harness:run-monitor` | Watches a CI run, deploy or long job from the main session: polls at an interval you set and posts a status line each time, checks the outcome against what was expected (jobs listed in Project config, counts, side effects) before calling it done, and on failure has a subagent find the first failing step and say whether it's a real defect or a reporting artifact. Reads only: it offers to file an issue for a real defect and files one only on your yes. |
 | `harness:ship-and-land` | Takes an implemented issue from a committed branch to verified production when you say "ship it": runs the Project config pre-flight checks, opens a PR that closes the issue (body from the Base layer's `pr` skill when it's installed), diagnoses failing or missing CI checks (real failure, flake, checks that never fired), stops for your explicit go-ahead before a merge that deploys, merges, watches CI and the deploy with run-monitor's interval status, hands off to live-verifier, closes the issue if the merge didn't, then runs close-session. Doesn't review the code again; GitHub only in v1, with every host command in one section. |
 | `harness:live-verifier` (subagent) | Checks a change on a dev or live target (from the Project config) against the acceptance criteria of an issue or PR, in the Harness browser and with read-only API calls, and returns a pass/fail table you can turn into a punchlist. Sets up and resets fixtures on dev targets only, lists the steps only you can do (a sign-in) and waits for them. Read-only by construction: no file-editing tools, and a hook limits its Bash to reads. |
+| `harness:data-digest` (subagent) | Pulls large datasets through the data connectors in the Project config (MCP servers or CLIs) and local exports, and returns compact tables (50 rows or fewer), the exact method and whether the sweep was complete or partial, so raw data never enters your main context. Saves a full extract only to a path you give. Strictly read-only: a hook limits its Bash to reads, its MCP calls to the connectors' reads and its writes to a new extract file; a write you ask for comes back as a prepared payload for gated-write. |
 
 Vocabulary (Harness, Base layer, Live write, Project config and the rest) is defined in [GLOSSARY.md](GLOSSARY.md); design decisions are in [docs/adr](docs/adr).
 
@@ -77,7 +78,7 @@ claude plugin validate --strict plugin   # plugin
 scripts/test-leak-check.sh               # leak-check tests
 scripts/test-setup-detect.sh             # setup-harness detector tests
 scripts/test-fake-gh.sh                  # fake gh used by eval fixtures (plugin/evals/fakes)
-scripts/test-guard.sh                    # hook tests: live-verifier read-only Bash, background pages (needs node)
+scripts/test-guard.sh                    # hook tests: read-only live-verifier and data-digest, background pages (needs node)
 scripts/test-release-check.sh            # release-check tests
 scripts/release-check.sh . v0.1.0        # before tagging: plugin version is the newest CHANGELOG entry and matches the tag
 scripts/leak-check.sh .                  # fail on emails, home paths, store domains, theme IDs, account subdomains, chat and resource IDs

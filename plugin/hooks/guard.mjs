@@ -4,21 +4,49 @@
 // Harness browser page tools, for every agent: pages open in the background and
 // are never brought to the front (S10).
 //
-// live-verifier's Bash: denies anything that could write. Allowlist, not
-// denylist: a command passes only if every part of it is a known read (file and
-// git inspection, gh reads, curl GET/HEAD), the Project config's fixture reset
-// command, or a data-connector CLI the Project config marks read-only. Anything
-// it can't parse is denied.
+// The read-only subagents' Bash (live-verifier, data-digest): denies anything
+// that could write. Allowlist, not denylist: a command passes only if every
+// part of it is a known read (file and git inspection, gh reads, curl
+// GET/HEAD), the Project config's fixture reset command (live-verifier only),
+// or a read through a Project config data connector: any command of a
+// read-only CLI, or a listed read of a read-write one. Anything it can't parse
+// is denied.
+//
+// data-digest's other tools: it inherits the session's tools, because the
+// operator's connector servers can't be named in its frontmatter in advance.
+// An MCP call passes only if it is on a Project config connector server that is
+// read-only, or is one of a read-write server's listed reads. A Write passes
+// only if it creates a new data file (an extract) outside hidden directories.
+// Any other tool passes only if it is on a short list of reads (DIGEST_READS).
 import { existsSync, readFileSync } from "node:fs";
-import { join } from "node:path";
+import { extname, isAbsolute, join, relative, resolve, sep } from "node:path";
 
-const AGENT = /(^|:)live-verifier$/;
+const AGENT = /(^|:)(live-verifier|data-digest)$/;
 const BROWSER = "mcp__plugin_harness_browser__";
 
-const BASH_REASON =
-  " live-verifier's Bash is read-only: file and git inspection, gh reads, curl GET/HEAD," +
-  " the Project config fixture reset command, and data-connector CLIs it marks read-only." +
-  " Use the browser tools for UI checks; report anything that needs a write instead of doing it.";
+const EXTRACT_TYPES = [".csv", ".tsv", ".json", ".jsonl", ".ndjson", ".txt"];
+// Tools data-digest may use unchecked. Bash, Write and MCP tools are checked;
+// anything else is denied.
+const DIGEST_READS = new Set(["Read", "Grep", "Glob", "WebFetch", "WebSearch", "ToolSearch", "Skill", "TodoWrite"]);
+
+const BASH_READS = "Bash is read-only: file and git inspection, gh reads, curl GET/HEAD,";
+const HAND_BACK = " Hand back any write as a PREPARED, NOT EXECUTED payload instead of running it.";
+const BASH_REASON = {
+  "live-verifier":
+    ` live-verifier's ${BASH_READS} the Project config fixture reset command, and reads through its data connectors.` +
+    " Use the browser tools for UI checks; report anything that needs a write instead of doing it.",
+  "data-digest": ` data-digest's ${BASH_READS} and reads through the Project config data connectors.${HAND_BACK}`,
+};
+const MCP_REASON =
+  " data-digest calls only the MCP servers the Project config lists under Data connectors:" +
+  " any tool of a read-only one, and only the listed reads of a read-write one." +
+  ` If a read you need isn't listed, report BLOCKED.${HAND_BACK}`;
+const WRITE_REASON =
+  ` data-digest writes only extracts: a new ${EXTRACT_TYPES.join(", ")} file at the path the caller gave,` +
+  " never over an existing file or into a hidden directory.";
+const TOOL_REASON =
+  ` data-digest reads, digests and hands back: ${[...DIGEST_READS].join(", ")}, read-only Bash,` +
+  ` connector MCP reads, and Write for a new extract.${HAND_BACK}`;
 const FOCUS_REASON = " The Harness browser must never take the operator's focus (S10).";
 
 function main() {
@@ -31,17 +59,36 @@ function main() {
   const tool = String(input.tool_name ?? "");
   if (tool.startsWith(BROWSER)) {
     const reason = checkFocus(tool.slice(BROWSER.length), input.tool_input ?? {});
-    if (reason) deny(reason, FOCUS_REASON);
-    return;
+    if (reason) return deny(reason, FOCUS_REASON);
   }
-  if (tool !== "Bash" || !AGENT.test(String(input.agent_type ?? ""))) return;
+  const agent = String(input.agent_type ?? "").match(AGENT)?.[2];
+  const guard = agent && guardFor(agent, tool);
+  if (!guard) return;
   let reason;
   try {
-    reason = check(String(input.tool_input?.command ?? ""), loadConfig(input.cwd));
+    reason = guard.check(input.tool_input ?? {}, input.cwd);
   } catch (err) {
     reason = `guard error (${err.message}).`;
   }
-  if (reason) deny(reason, BASH_REASON);
+  if (reason) deny(reason, guard.why);
+}
+
+// The check a read-only subagent's tool call must pass, or null if it needs none.
+function guardFor(agent, tool) {
+  if (tool === "Bash") {
+    return {
+      why: BASH_REASON[agent],
+      check: (input, cwd) => {
+        const config = loadConfig(cwd);
+        // Resetting fixtures is live-verifier's job.
+        return check(String(input.command ?? ""), agent === "live-verifier" ? config : { ...config, reset: null });
+      },
+    };
+  }
+  if (agent !== "data-digest" || DIGEST_READS.has(tool)) return null;
+  if (tool.startsWith("mcp__")) return { why: MCP_REASON, check: (_, cwd) => checkMcp(tool, loadConfig(cwd)) };
+  if (tool === "Write") return { why: WRITE_REASON, check: (input, cwd) => checkWrite(String(input.file_path ?? ""), cwd) };
+  return { why: TOOL_REASON, check: () => `\`${tool}\` is not on data-digest's tool list.` };
 }
 
 function deny(reason, why) {
@@ -63,9 +110,13 @@ function checkFocus(tool, input) {
 }
 
 // Project config (docs/agents/harness.md): the fixture reset command and the
-// CLIs listed as read-only data connectors, found by section heading and key.
+// data connectors, found by section heading and key. A connector line (format
+// in skills/setup-harness/project-config.md) allows the whole CLI or server
+// when it is read-only, else only its listed reads (words after the CLI
+// command, or tool names on the server). A read-write connector without reads
+// allows nothing.
 function loadConfig(cwd) {
-  const config = { reset: null, readOnlyClis: [] };
+  const config = { reset: null, cliReads: [], mcpReads: [] };
   const file = cwd ? join(cwd, "docs/agents/harness.md") : null;
   if (!file || !existsSync(file)) return config;
   let section = "";
@@ -79,8 +130,16 @@ function loadConfig(cwd) {
       const m = line.match(/^\s*-\s*\*\*Reset\*\*:\s*`([^`]+)`\s*$/);
       if (m) config.reset = m[1].trim();
     } else if (section === "data connectors") {
-      const m = line.match(/^\s*-\s*\*\*[^*]+\*\*:\s*CLI\s+`([^`]+)`\s*;\s*read-only\s*$/i);
-      if (m) config.readOnlyClis.push(m[1].trim().split(/\s+/));
+      const m = line.match(
+        /^\s*-\s*\*\*[^*]+\*\*:\s*(CLI|MCP server)\s+`([^`]+)`[^;]*;\s*(read-only|read-write)\s*(?:;\s*reads:\s*(.*?))?\s*$/i,
+      );
+      if (!m) continue;
+      const [, kind, name, access, listed] = m;
+      const reads = access.toLowerCase() === "read-only" ? [""] : [...(listed ?? "").matchAll(/`([^`]+)`/g)].map((r) => r[1]);
+      for (const read of reads) {
+        if (kind.toUpperCase() === "CLI") config.cliReads.push(`${name} ${read}`.trim().split(/\s+/));
+        else config.mcpReads.push([name.trim(), read.trim()]);
+      }
     }
   }
   return config;
@@ -90,10 +149,14 @@ function check(command, config) {
   if (config.reset && command.trim() === config.reset) return null;
   const parsed = tokenize(command);
   if (typeof parsed === "string") return parsed;
+  // After a `cd`, a connector CLI spelled as a relative path could be a
+  // different program.
+  let moved = false;
   for (const words of parsed) {
     if (words.length === 0) continue;
-    const reason = checkSimple(words, config);
+    const reason = checkSimple(words, moved ? { ...config, cliReads: config.cliReads.filter((r) => !r[0].includes("/")) } : config);
     if (reason) return reason;
+    moved ||= words[0] === "cd";
   }
   return null;
 }
@@ -234,12 +297,13 @@ const READERS = new Set([
 function checkSimple(words, config) {
   const [prog, ...args] = words;
   if (/^[A-Za-z_][A-Za-z0-9_]*=/.test(prog)) return "environment assignment before a command.";
-  if (prog.includes("/")) return `\`${prog}\`: run programs by bare name.`;
   // A variable that makes up a whole word could expand to a flag such as -XPOST.
   if (words.some((w) => w.startsWith("$"))) return "a variable used as a whole argument.";
-  for (const cli of config.readOnlyClis) {
-    if (cli.every((w, n) => words[n] === w)) return null;
+  // A connector CLI runs as the Project config spells it, path and all.
+  for (const read of config.cliReads) {
+    if (read.every((w, n) => words[n] === w)) return null;
   }
+  if (prog.includes("/")) return `\`${prog}\`: run programs by bare name.`;
   if (READERS.has(prog)) return null;
   switch (prog) {
     case "rg":
@@ -263,6 +327,31 @@ function checkSimple(words, config) {
     default:
       return `\`${prog}\` is not on the read-only command list.`;
   }
+}
+
+// An extract is a new data file. Hidden path parts are checked from the repo
+// down when the file is inside it (so a repo under a dot directory still
+// works), else along the whole path.
+function checkWrite(file, cwd) {
+  if (!file) return "a Write without a file path.";
+  const base = cwd || process.cwd();
+  const path = resolve(base, file);
+  const inside = relative(base, path);
+  const parts = (inside && !inside.startsWith("..") && !isAbsolute(inside) ? inside : path).split(sep);
+  if (parts.some((part) => part.startsWith("."))) return "a write into a hidden directory or file.";
+  if (!EXTRACT_TYPES.includes(extname(path).toLowerCase())) return "a write that isn't a data extract.";
+  if (existsSync(path)) return "a write over an existing file.";
+  return null;
+}
+
+// Tools are named mcp__<server>__<tool>, with the server as the Project config
+// spells it.
+function checkMcp(tool, config) {
+  const reads = config.mcpReads.filter(([server]) => tool.startsWith(`mcp__${server}__`));
+  if (reads.length === 0) return `\`${tool}\` is not on a Project config data connector.`;
+  return reads.some(([server, read]) => read === "" || tool === `mcp__${server}__${read}`)
+    ? null
+    : `\`${tool}\` is not a listed read of its connector.`;
 }
 
 function positionals(args, valueFlags) {
