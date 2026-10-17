@@ -44,7 +44,7 @@ Graders read `.fake-gh/calls.log` (one `gh <args>` line per call) with a `regex`
 | `prs/<n>.json` | Fixed PR fields for `gh pr view <n>` (`headRefName` links it to runs for `gh pr checks`). |
 | `next-pr` | The number `gh pr create` gives the first PR it opens (default 100). |
 | `default-branch` | The default branch (default `main`): `pr create`'s base, and where a merge closes issues. |
-| `issues.json` | Existing issues for `gh issue list` / `view` (default `[]`). |
+| `issues.json` | Existing issues for `gh issue list` / `view` (default `[]`), with the fields `--json` asks for: `number`, `title`, `state` (`OPEN` or `CLOSED`), `body`, `url`, and optionally `labels` (`[{"name": ...}]`), `blockedBy` (GitHub's native links: `{"nodes": [{"number", "state"}], "totalCount"}`), `subIssues`, `comments` (`[{"body": ...}]`, shown by `--json comments`; `--comments` prints only the issue). |
 
 ### Git in the eval sandbox
 
@@ -66,4 +66,4 @@ A run whose `run.json` has `"startsOn": "pr-open:<branch>"` or `"merge:<branch>"
 
 ### Supported commands
 
-`run list` (filters: `--workflow` file or name, `--branch`, `--commit`, `--status`, `--event`, `--limit`), `run view` (`--json`, `--jq`, `--log`, `--log-failed`, `--job`, `--exit-status`), `run watch`, `workflow list`, `pr create`, `pr list` (`--head`, `--base`, `--state`, `--limit`), `pr view`, `pr edit`, `pr checks`, `pr merge`, `issue list`, `issue view`, `issue create` (prints a made-up URL and records the issue in `state/created-issues.jsonl`), `issue close`, `issue reopen`, `issue comment`, `auth status`, `--version`. `--repo` is accepted and ignored. Anything else exits 1 with the list of supported commands; extend the fake (test first) when a skill needs more.
+`run list` (filters: `--workflow` file or name, `--branch`, `--commit`, `--status`, `--event`, `--limit`), `run view` (`--json`, `--jq`, `--log`, `--log-failed`, `--job`, `--exit-status`), `run watch`, `workflow list`, `pr create`, `pr list` (`--head`, `--base`, `--state`, `--limit`), `pr view`, `pr edit`, `pr checks`, `pr merge`, `issue list` (newest first; `--state`, default open; `--label`, repeated or comma-separated, all must match; `--limit`; `--search` is accepted and ignored), `issue view`, `issue create` (prints a made-up URL and records the issue in `state/created-issues.jsonl`), `issue close`, `issue reopen`, `issue comment`, `auth status`, `--version`. `--repo` is accepted and ignored. Anything else exits 1 with the list of supported commands; extend the fake (test first) when a skill needs more.

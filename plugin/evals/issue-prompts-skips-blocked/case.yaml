@@ -1,0 +1,22 @@
+schema_version: "1.1"
+name: issue-prompts-skips-blocked
+description: >
+  "Prep lanes" for a label. The fake gh holds open and closed issues under
+  that label and one ready issue under another. issue-prompts writes prompts
+  only for the two ready ones (42, 43), and leaves out 44 (blocked by an open
+  issue through GitHub's native link only) and 45 (blocked by an open issue in
+  its body's Blocked by list only), naming both and their blockers in the reply.
+tags: [issue-prompts]
+runs: 3
+execution:
+  max_turns: 50
+  timeout_seconds: 600
+  allowed_tools: [Read, Glob, Grep, Skill, Bash, Agent, Write, Edit]
+  append_system_prompt: >
+    This sandbox has no network and no real GitHub CLI. A stand-in GitHub CLI
+    is installed at .fake-gh/bin/gh in the working directory; run it by that
+    path wherever you would run `gh`, and tell any subagent you start to do the same.
+    Plain `git` may fail in this sandbox: run git as .fake-gh/bin/git instead.
+    The remote `origin` works offline.
+context:
+  scaffold_script: fixture-repo.sh
