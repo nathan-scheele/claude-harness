@@ -74,3 +74,16 @@ jobs:
       - uses: actions/checkout@v4
       - name: Eval fake gh tests
         run: scripts/test-fake-gh.sh
+
+  eval-tools:
+    strategy:
+      matrix:
+        os: [ubuntu-latest, macos-latest] # macOS for its bash 3.2
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Eval trace saving and offline grader tests
+        run: /bin/bash scripts/test-eval-tools.sh

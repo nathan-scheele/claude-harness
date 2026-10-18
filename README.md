@@ -79,16 +79,18 @@ claude plugin validate --strict plugin   # plugin
 scripts/test-leak-check.sh               # leak-check tests
 scripts/test-setup-detect.sh             # setup-harness detector tests
 scripts/test-fake-gh.sh                  # fake gh used by eval fixtures (plugin/evals/fakes)
+scripts/test-eval-tools.sh               # eval trace saving and the offline grader checker (needs jq, node)
 scripts/test-guard.sh                    # hook tests: read-only live-verifier and data-digest, background pages (needs node)
 scripts/test-release-check.sh            # release-check tests
 scripts/release-check.sh . v0.1.0        # before tagging: plugin version is the newest CHANGELOG entry and matches the tag
 scripts/leak-check.sh .                  # fail on emails, home paths, store domains, theme IDs, account subdomains, chat and resource IDs
-scripts/run-evals.sh                     # behavioural evals vs a no-plugin baseline (uses your Claude credentials)
+scripts/run-evals.sh --case <name>       # behavioural evals vs a no-plugin baseline (uses your Claude credentials); saves traces
+scripts/check-graders.mjs <case>         # re-grade a case's saved traces offline
 ```
 
 CI runs strict validation, the leak check and the release check (without a tag) on every push and PR. Private identifiers the leak check must catch but this public repo must not contain (a work domain, a store name) go in the `LEAK_PATTERNS` repository secret, one extended regex per line.
 
-Evals live in `plugin/evals/<case>/`. Each case builds a fixture repo with its scaffold script and runs once with the plugin and once without; `run-evals.sh` fails unless every case passes and the plugin beats the baseline. Eval runs are headless, so the structured question tool (AskUserQuestion) isn't available in them; cases assert the Standards' headless fallback instead. Fixture builders shared by several cases live in `plugin/evals/fixtures/`; external systems are fakes inside the fixture that log their calls (the gated-write cases' `bin/notes-db` data connector), so graders check what was actually called and in what order. Stand-ins for CLIs several skills use live in `plugin/evals/fakes/` (a fake `gh` that replays canned CI, PR and issue states and records every call); fixtures install them, as its README describes. Plugin MCP servers never start in eval runs; cases answer their tools from mocks in `<case>/mocks/<server>/` (the live-verifier cases mock the Harness browser as `browser/`).
+Evals live in `plugin/evals/<case>/`: each case builds a fixture repo, runs with the plugin and without it, and `run-evals.sh` fails unless every case passes and the plugin beats the baseline. Writing a case or grader, and debugging a failed run: [plugin/evals/README.md](plugin/evals/README.md).
 
 ## Credits
 
