@@ -1,0 +1,1 @@
+Have data-digest dig into the production notes database for me: how many notes are there in each status, and how many active notes were last edited before 2024, broken down by year of last edit? Save the full list of those stale active notes to `extracts/stale-notes.csv`.
