@@ -28,7 +28,8 @@
   ],
   "agents": [
     "./agents/live-verifier.md",
-    "./agents/data-digest.md"
+    "./agents/data-digest.md",
+    "./agents/integration-reviewer.md"
   ],
   "mcpServers": {
     "browser": {
