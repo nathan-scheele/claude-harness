@@ -101,6 +101,8 @@ When the verdict is yes, end with a priming prompt in a fenced code block: one p
 - Which skills to start with, if any.
 - No secrets, tokens or personal data.
 
+Put one short plain line directly above the code block saying to paste it as the first message of the next session, after `/clear` or in a new window, e.g. "To pick this up in a fresh session, paste this as your first message after `/clear` (or in a new window):". A bare label like "Priming prompt:" doesn't say that.
+
 Write the prompt yourself. If the next session needs more than a prompt can carry, suggest the operator run the Base layer's `/handoff` if it is installed (only the operator can invoke it) and reference the document it writes; if it isn't, put the extra detail in the tracker in step 4 and link it.
 
 Close with one line: what was removed or kept, and that the session is safe to clear (after `/retro`, if step 6 suggested it).
