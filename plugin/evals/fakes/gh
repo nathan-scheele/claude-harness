@@ -11,7 +11,7 @@ DIR="${FAKE_GH_DIR:-$(cd "$(dirname "$0")/.." && pwd)}"
 mkdir -p "$DIR/state"
 printf '%s\n' "gh${*:+ $(printf '%s' "$*" | tr '\n' ' ')}" >> "$DIR/calls.log"
 
-SUPPORTED="run list, run view, run watch, workflow list, pr create, pr list, pr view, pr edit, pr checks, pr merge, issue list, issue view, issue create, issue close, issue reopen, issue comment, auth status, --version"
+SUPPORTED="run list, run view, run watch, workflow list, pr create, pr list, pr view, pr edit, pr comment, pr checks, pr merge, issue list, issue view, issue create, issue close, issue reopen, issue comment, auth status, --version"
 
 die() {
   echo "fake gh: $*" >&2
@@ -320,6 +320,8 @@ cmd_pr_view() {
   reject template web
   local p
   p="$(pr_json "$POS1")" || exit 1
+  p="$(jq -c --argjson c "$(issue_comments)" '(.number | tostring) as $n
+    | .comments = ((.comments // []) + [$c[] | select(.pr == $n) | {body}])' <<<"$p")"
   show "$p" '"\(.title) #\(.number)", "\(.state)", "", "\(.body // "")", "", "View this pull request on GitHub: \(.url)"'
 }
 
@@ -333,6 +335,16 @@ cmd_pr_list() {
       and (if $st == "ALL" then true elif $st == "" then .state == "OPEN" else .state == $st end)))
     | sort_by(-.number) | .[:(if $lim == "" then 30 else ($lim | tonumber) end)]')" || exit 1
   show "$p" '.[] | [(.number | tostring), .title, .headRefName, .state] | @tsv'
+}
+
+cmd_pr_comment() {
+  parse "R/repo= b/body= F/body-file= e/editor w/web" "$@"
+  reject editor web
+  local p body
+  p="$(pr_json "$POS1")" || exit 1
+  body="$(read_body)" || exit 1
+  [ -n "$body" ] || die "--body or --body-file required when not running interactively"
+  add_comment pr "$(jq -r .number <<<"$p")" "$body"
 }
 
 cmd_pr_create() {
@@ -508,12 +520,16 @@ cmd_issue_create() {
   parse "R/repo= t/title= b/body= F/body-file= l/label= a/assignee= m/milestone= p/project= T/template= w/web" "$@"
   reject web
   [ -n "$(opt title)" ] || die "must provide --title and --body when not running interactively"
-  local n url
+  local n url body
+  body="$(read_body)" || exit 1
   n="$(cat "$DIR/state/next-issue" 2>/dev/null || echo 101)"
   echo $((n + 1)) > "$DIR/state/next-issue"
   url="https://github.com/$REPO/issues/$n"
-  jq -nc --argjson n "$n" --arg t "$(opt title)" --arg b "$(opt body)" --arg u "$url" \
-    '{number: $n, title: $t, body: $b, state: "OPEN", url: $u}' >> "$DIR/state/created-issues.jsonl"
+  # Repeated or comma-separated labels, as gh takes them.
+  jq -nc --argjson n "$n" --arg t "$(opt title)" --arg b "$body" --arg u "$url" \
+    --arg l "$(opt_all label | tr '\n' ',')" \
+    '{number: $n, title: $t, body: $b, state: "OPEN", url: $u,
+      labels: ($l | split(",") | map(select(. != "") | {name: .}))}' >> "$DIR/state/created-issues.jsonl"
   echo "$url"
 }
 
@@ -527,7 +543,7 @@ cmd_issue_close() {
     return 0
   fi
   set_issue_state "$POS1" CLOSED
-  has_opt comment && add_comment "$POS1" "$(opt comment)"
+  has_opt comment && add_comment issue "$POS1" "$(opt comment)"
   echo "✓ Closed issue #$POS1 ($(jq -r .title <<<"$i"))"
 }
 
@@ -537,14 +553,16 @@ cmd_issue_reopen() {
   i="$(issues_json | jq -c --arg n "$POS1" '.[] | select((.number | tostring) == $n)')"
   [ -n "$i" ] || die "GraphQL: Could not resolve to an issue or pull request with the number of $POS1."
   set_issue_state "$POS1" OPEN
-  has_opt comment && add_comment "$POS1" "$(opt comment)"
+  has_opt comment && add_comment issue "$POS1" "$(opt comment)"
   echo "✓ Reopened issue #$POS1 ($(jq -r .title <<<"$i"))"
 }
 
-# add_comment <issue> <body>: records a comment; prints its URL.
+# add_comment <issue|pr> <number> <body>: records a comment; prints its URL.
 add_comment() {
-  jq -nc --arg i "$1" --arg b "$2" '{issue: $i, body: $b}' >> "$DIR/state/comments.jsonl"
-  echo "https://github.com/$REPO/issues/$1#issuecomment-$((900000 + $(grep -c . "$DIR/state/comments.jsonl")))"
+  local path=issues
+  [ "$1" = pr ] && path=pull
+  jq -nc --arg k "$1" --arg n "$2" --arg b "$3" '{($k): $n, body: $b}' >> "$DIR/state/comments.jsonl"
+  echo "https://github.com/$REPO/$path/$2#issuecomment-$((900000 + $(grep -c . "$DIR/state/comments.jsonl")))"
 }
 
 cmd_issue_comment() {
@@ -555,7 +573,7 @@ cmd_issue_comment() {
     || die "GraphQL: Could not resolve to an issue or pull request with the number of $POS1."
   body="$(read_body)" || exit 1
   [ -n "$body" ] || die "--body or --body-file required when not running interactively"
-  add_comment "$POS1" "$body"
+  add_comment issue "$POS1" "$body"
 }
 
 # Workflows are the ones the scenario's runs belong to, all active.
@@ -577,6 +595,7 @@ case "${1:-} ${2:-}" in
   "pr view") shift 2; cmd_pr_view "$@" ;;
   "pr merge") shift 2; cmd_pr_merge "$@" ;;
   "pr edit") shift 2; cmd_pr_edit "$@" ;;
+  "pr comment") shift 2; cmd_pr_comment "$@" ;;
   "pr checks") shift 2; cmd_pr_checks "$@" ;;
   "issue list") shift 2; cmd_issue_list "$@" ;;
   "issue view") shift 2; cmd_issue_view "$@" ;;

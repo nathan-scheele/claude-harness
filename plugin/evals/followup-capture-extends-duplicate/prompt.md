@@ -1,0 +1,1 @@
+While checking PR #12 I exported my notes to CSV, and a note tagged `work,home` came out with its tags split across two columns. lib/export.js joins the tags with commas and never quotes them. File it.

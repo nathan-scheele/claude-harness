@@ -1,0 +1,22 @@
+schema_version: "1.1"
+name: followup-capture-files-new
+description: >
+  Mid-session on PR 12 (tag search, closes 42 under spec 40), the operator says
+  "file it" about updateNoteTags saving tags without normalizeTags. No open
+  issue covers it: 41 (normalizeTags) is closed and 43 backfills stored data,
+  not the write path. followup-capture searches first, then files one new issue
+  with evidence, acceptance criteria, a parent link to 40 and the needs-triage
+  label, and cross-links it from PR 12.
+tags: [followup-capture]
+runs: 3
+execution:
+  max_turns: 40
+  timeout_seconds: 600
+  allowed_tools: [Read, Glob, Grep, Skill, Bash, Agent, Write, Edit]
+  append_system_prompt: >
+    This sandbox has no network and no real GitHub CLI. A stand-in GitHub CLI
+    is installed at .fake-gh/bin/gh in the working directory; run it by that
+    path wherever you would run `gh`, and tell any subagent you start to do the same.
+    Plain `git` may fail in this sandbox: run git as .fake-gh/bin/git instead.
+context:
+  scaffold_script: fixture-repo.sh
