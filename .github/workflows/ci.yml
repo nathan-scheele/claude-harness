@@ -75,6 +75,16 @@ jobs:
       - name: Eval fake gh tests
         run: scripts/test-fake-gh.sh
 
+  recon-cli:
+    strategy:
+      matrix:
+        os: [ubuntu-latest, macos-latest] # macOS for its bash 3.2
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: private-api-recon CLI template tests
+        run: /bin/bash scripts/test-recon-cli.sh
+
   eval-tools:
     strategy:
       matrix:
