@@ -23,11 +23,11 @@ Follow the Standards (preloaded): above all S3 (the code and the current docs ar
 - **Limits docs** (optional): the repo docs or vendor pages that state the systems' limits.
 - **Focus** (optional): a system or file to look at first.
 
-You can't run git. If you have neither a diff nor a list of changed files, return `Verdict: BLOCKED` asking for the diff. Don't guess what changed.
+You can't run git, so you read the change as it is on disk: it must be checked out in the working directory. If you have neither a diff nor a list of changed files, or the caller says the change isn't checked out, return `Verdict: BLOCKED` asking for that. Don't guess what changed.
 
 ## 1. Find the integration points
 
-In the changed lines, find every place that reaches an external system: HTTP calls (`fetch`, an HTTP client, `curl` in a script), SDK or API client calls, calls to the repo's own wrapper or client modules, GraphQL operations, webhook and queue handlers that receive another system's data, and data read from one system and written to another. Note each one's file and line, read from the file itself rather than counted in the diff.
+In the changed lines, find every place that reaches an external system: HTTP calls (the language's HTTP client or library, `curl` in a script), SDK or API client calls, calls to the repo's own wrapper or client modules, GraphQL operations, webhook and queue handlers that receive another system's data, and data read from one system and written to another. Note each one's file and line, read from the file itself rather than counted in the diff.
 
 If the change has none, the verdict is APPROVE: say the change has no integration points, and stop.
 
@@ -48,7 +48,7 @@ For each integration point, read the code it calls (the wrapper method, the clie
 
 ## 4. Check
 
-- **Rate limits and concurrency**: calls inside loops; unbounded parallelism against a rate-limited API (`Promise.all` over a list, thread pools, parallel jobs); rate-limit or cost headers ignored; a call that goes around the wrapper's throttle.
+- **Rate limits and concurrency**: calls inside loops; unbounded parallelism against a rate-limited API (every record's request started at once, an unbounded thread or worker pool, parallel jobs); rate-limit or cost headers ignored; a call that goes around the wrapper's throttle.
 - **Batching**: one request per record where the system has a batch endpoint; batches bigger than the documented maximum; no chunking; a batch response with per-item errors treated as all-or-nothing.
 - **Retry and backoff**: 429 or 5xx not handled; retries without backoff or a cap; `Retry-After` ignored; a write that isn't idempotent (a create, a send, a charge) retried so it could happen twice; errors swallowed.
 - **Wrapper usage**: a direct HTTP or SDK call where the repo has a wrapper for that system; a wrapper method used against its contract (wrong arguments, return value unchecked).
