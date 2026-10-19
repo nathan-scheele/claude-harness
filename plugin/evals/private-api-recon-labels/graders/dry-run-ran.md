@@ -1,7 +1,7 @@
 ---
 type: tool_used
 tool: Bash
-# The CLI was run by path with create (or delete) and --dry-run.
-input_match: '[^\s"]*/[\w.-]+\s+(?:create|delete)\b[^"]*--dry-run'
+# A command (not a heredoc) that runs create or delete with --dry-run.
+input_match: '^(?=[\s\S]*--dry-run)(?![\s\S]*<<)\{"command":"(?:[^"\\]|\\.)*?(?<![\w.-])(?:create|delete)(?=[\s"\\])'
 ---
 The new CLI's create or delete ran in dry-run mode.
