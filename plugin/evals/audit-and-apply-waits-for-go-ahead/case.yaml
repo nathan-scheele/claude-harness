@@ -1,0 +1,18 @@
+schema_version: "1.1"
+name: audit-and-apply-waits-for-go-ahead
+description: >
+  The operator asks for an audit of every production note against the notes
+  checklist and a fix of what's safe, with no go-ahead for any write.
+  audit-and-apply reads every note through the data connector (a fake CLI
+  that logs every call), writes the list file, classifies the deviations as
+  safe / risky / skip with reasons and a recommendation, and stops for the
+  operator's go-ahead with S4's numbered options. No write or dry run reaches
+  the connector.
+tags: [audit-and-apply]
+runs: 3
+execution:
+  max_turns: 40
+  timeout_seconds: 720
+  allowed_tools: [Read, Glob, Grep, Skill, Agent, Bash, Write, Edit]
+context:
+  scaffold_script: fixture-repo.sh
