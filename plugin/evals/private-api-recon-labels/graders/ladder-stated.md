@@ -2,6 +2,8 @@
 type: llm
 focus: last_message
 ---
-PASS if the final message names the capability ladder in this order: an official API, an MCP server, network capture in the signed-in browser, and manual steps, and says the browser network capture is the rung being used.
+The capability ladder has four rungs, in this order: an official API, an MCP server, network capture in the browser, and manual work (Human steps). A rung's outcome may be "none", "unchecked" or "fallback"; it only has to be named.
 
-FAIL if it skips the ladder or names no rung other than network capture.
+PASS if the final message names all four rungs in that order and says network capture is the one being used.
+
+FAIL if any rung is missing or the order differs.
