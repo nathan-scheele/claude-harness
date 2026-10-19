@@ -35,7 +35,7 @@ The plugin's MCP servers never start in eval runs. A case answers their tools fr
 
 ## Graders
 
-Every grader has `type` and optionally `arm`. **`arm: with-only` graders are not scored**: they only show whether the plugin fired. Anything that should count uses `arm: both` (the default).
+Every grader has `type` and optionally `arm`. **`arm: with-only` graders are not scored**: they only show whether the plugin fired. Anything that should count uses `arm: both` (the default). A `tool_used: Skill` grader is likewise only a plugin-fired indicator, so a case must beat the baseline on behaviour: grade something the skill does that a plain session skips (a default Claude already searches before filing an issue, but doesn't cross-link it from the PR).
 
 - **`tool_used`**: `tool`, optional `input_match` (a regex over the call's input as compact JSON), `min` (default 1) and `max`. "Must not call" is `min: 0` and `max: 0`. Whether it counts calls made inside a subagent is unverified; grade a subagent's calls with a regex on the trace.
 - **`tool_order`**: `before` and `after`, each one `{tool, input_match}`.

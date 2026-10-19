@@ -321,7 +321,7 @@ cmd_pr_view() {
   local p
   p="$(pr_json "$POS1")" || exit 1
   p="$(jq -c --argjson c "$(issue_comments)" '(.number | tostring) as $n
-    | .comments = ((.comments // []) + [$c[] | select(.pr == $n) | {body}])' <<<"$p")"
+    | .comments = ((.comments // []) + [$c[] | select(.pr == $n) | {body}])' <<<"$p")" || exit 1
   show "$p" '"\(.title) #\(.number)", "\(.state)", "", "\(.body // "")", "", "View this pull request on GitHub: \(.url)"'
 }
 

@@ -163,7 +163,7 @@ cat > .fake-gh/issues.json <<JSON
   "body": "## Parent\n\n#40\n\n## What to build\n\nGET /notes?tag=<tag> returns notes with that tag, matching case-insensitively.\n\n## Acceptance criteria\n\n- [ ] ?tag=Work and ?tag=work return the same notes\n- [ ] An unknown tag returns an empty list\n"},
  {"number": 43, "title": "Backfill normalized tags on existing notes", "state": "OPEN", "url": "$U/43",
   "labels": [{"name": "tags-v2"}, {"name": "ready-for-agent"}],
-  "body": "## Parent\n\n#40\n\n## What to build\n\nA one-off script that rewrites the tags already stored on every existing note with normalizeTags.\n\n## Acceptance criteria\n\n- [ ] Every stored note's tags are lowercase, trimmed and unique\n- [ ] A rollback file records each note's tags before the change\n"},
+  "body": "## Parent\n\n#40\n\n## What to build\n\nA one-off script that rewrites the tags already stored on every existing note with normalizeTags. Script only: how notes are saved from now on is out of scope.\n\n## Acceptance criteria\n\n- [ ] Every stored note's tags are lowercase, trimmed and unique\n- [ ] A rollback file records each note's tags before the change\n"},
  {"number": 48, "title": "Exported CSV has misaligned columns", "state": "OPEN", "url": "$U/48",
   "labels": [{"name": "needs-triage"}],
   "body": "Some rows in the notes CSV export have more columns than the header. Looks like tag values aren't escaped.\n"},
