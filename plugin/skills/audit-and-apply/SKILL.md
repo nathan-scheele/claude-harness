@@ -30,7 +30,7 @@ Settle three things before reading anything in bulk:
 - **Checklist**: numbered checks, each with the value a passing consumer has. A file or issue the operator names is the checklist. For parity ("make B match A", "copy settings from A to B"), the checklist is A's values, one check per key.
 - **Audit issue**: the one the operator named, else the one the current branch or PR links.
 
-If the operator gave all three plainly, restate them in one line and carry on (S7). If any is missing or vague (which consumers, what counts as passing), ask (S4) and stop. Every check comes from the checklist; add none of your own.
+If the operator gave all three plainly, restate them in one line and carry on (S7). If any is missing or vague (which consumers, what counts as passing), ask (S4) and stop. Every check comes from the checklist.
 
 Then pick the **apply path**:
 
@@ -43,17 +43,17 @@ If the scope spans both, each part takes its own path, with one list file, one f
 
 Read every consumer in scope, read-only (S2): data from the live system through the connector (S3), code from the default branch. Read the whole scope unfiltered and filter locally, because a deviant consumer is exactly the one a filter misses (a status filter of `active` skips `Active`). With more than about 50 records, delegate the sweep to the `harness:data-digest` subagent with the list file as its extract path. For code, find consumers by search (`git grep`, globs), including ones reached indirectly (a shared partial, a generated file).
 
-Write the **list file**, `.audit/<slug>/consumers.tsv` at the repo root: a header row, then one row per consumer, its key (record id or path) first, then each field the checklist reads. `<slug>` is a short name for this audit. Keep `.audit/` out of git: if `git check-ignore -q .audit` fails, add `.audit/` to `.git/info/exclude` (if that write is refused, say so in the report). Never write it under `.claude/`.
+Write the **list file**, `.audit/<slug>/consumers.tsv` at the repo root: a header row, then one row per consumer, its key (record id or path) first, then each field the checklist reads. `<slug>` is a short name for this audit. Keep `.audit/` out of git: if `git check-ignore -q .audit` fails, add `.audit/` to `.git/info/exclude` (if that write is refused, say so in the report).
 
 Done when the list file's row count equals the system's count for the scope; state both.
 
 ## 4. Check and classify
 
-Run every check against every consumer. Each failing consumer-and-check pair is a finding. Classify each one:
+Run every check against every consumer. Each failing consumer-and-check pair is a finding. Classify each one by whether its fix needs a person's judgement (applying a safe fix to a live target is still a Live write):
 
 - **safe**: the checklist alone fixes the value, the fix changes nothing anyone relies on beyond passing the check, and it can be undone through the same connector or a revert (a case fix, a default the checklist names).
 - **risky**: the fix needs a person's judgement (which value?), changes what people see or can do, is hard to undo, or has no write command. When torn between safe and risky, it is risky.
-- **skip**: the checklist or the operator exempts the consumer (frozen, an excluded class) or it falls outside the scope. An exempt consumer is skip for every check, including ones whose fix looks safe. The reason names the rule.
+- **skip**: the checklist or the operator exempts the consumer (frozen, an excluded class). An exempt consumer is skip for every check, including ones whose fix looks safe. The reason names the rule.
 
 Write `.audit/<slug>/findings.csv` with columns `key,check,current,expected,class,reason`.
 
@@ -61,18 +61,18 @@ Post the **findings table** to chat and as a comment on the audit issue (S12): c
 
 ## 5. Apply the safe set
 
-Apply safe findings only; risky and skip findings are never written. The findings table and recommendation come from reads alone; leave the dry run to gated-write, which runs it after approval.
+Apply safe findings only.
 
-**Data**: invoke `harness:gated-write` (Skill tool) and hand it the target, the safe set as its scope (each record's key and before → after value), the exact write command, the audit issue, and the operator's advance go-ahead in their words if they gave one. gated-write owns the gate from there: its change table, approval, dry run, canary, spot-check, full run, re-check and ledger, and its dev and sandbox skip.
+**Data**: invoke `harness:gated-write` (Skill tool) and hand it the target, the safe set as its scope (each record's key and before → after value), the exact write command, the audit issue, and the operator's advance go-ahead in their words if they gave one. gated-write owns the gate from there.
 
-- An **advance go-ahead** counts when the operator gave it in this conversation, named this write (for example "status case fixes for the safe set"), accepted its effect and stated any condition. Check the classified safe set against that condition. If the safe set holds anything the condition doesn't cover, stop and ask (S1, S4).
+- An advance go-ahead (S1, ADR 0008) covers the write only if the classified safe set fits its condition. If the safe set holds anything the condition doesn't cover, stop and ask (S4).
 - When gated-write stops for the operator's approval, the audit stops too. The last message holds the findings table, your recommendation and gated-write's numbered options. Continue from here once the operator answers. If they decline, the safe set joins the remainder.
 
 **Code**: follow [chore-pr.md](chore-pr.md).
 
 ## 6. Re-diff
 
-After the last write, or the chore PR's last commit, run steps 3 and 4 again over the whole scope, not only the consumers you changed: re-read data from the live system, code from the PR branch. gated-write's re-check covers only what it wrote. This pass covers everything else too.
+After the last write, or the chore PR's last commit, run steps 3 and 4 again over the whole scope, not only the consumers you changed: re-read data from the live system, code from the PR branch. gated-write re-checks the records in its own scope, the safe set; this pass covers the whole audit scope.
 
 Compare the new results with the findings table:
 
@@ -83,7 +83,7 @@ Report matched and unmatched counts, with a deep link to each unmatched consumer
 
 ## 7. File one issue for the remainder
 
-File one new issue in the Project config tracker for every risky and skip finding plus anything unmatched (an issue in the operator's own tracker is pre-authorized, S2). Use one issue for all of them, not one per finding. The issue holds:
+File one new issue in the Project config tracker for every risky and skip finding plus anything unmatched (an issue in the operator's own tracker is pre-authorized, S2). The issue holds:
 
 - a link to the audit issue as its parent;
 - the counts;

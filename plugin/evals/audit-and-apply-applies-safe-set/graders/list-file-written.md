@@ -1,8 +1,8 @@
 ---
 type: regex
-# The list file of every note goes under .audit/<slug>/ (a Write call, a shell
-# redirect, or data-digest's extract path all name it in the trace).
-pattern: '\.audit/[\w.-]+/consumers\.(?:tsv|csv)'
+# The list file of every note is written under .audit/<slug>/: by the Write
+# tool (data-digest's extract included), or a shell redirect or tee.
+pattern: '(?:"file_path"\s*:\s*"[^"]*/|>\s*|\btee\s+(?:-a\s+)?)\.audit/[\w.-]+/consumers\.tsv'
 match: contains
 target: trace
 ---
