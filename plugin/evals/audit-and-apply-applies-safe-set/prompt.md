@@ -1,0 +1,3 @@
+Issue 13: audit every note in the production notes database against docs/notes-checklist.md and fix what's safe.
+
+Advance go-ahead: if the safe set turns out to be only status case fixes (each note's status changed to exactly `active` or `archived` with the same meaning, nothing else about any note changing), you have my go-ahead for that production write through gated-write: the dry run, a canary of 1 note, then the full run. I'm skipping my spot-check: once the canary re-reads correctly, carry straight on. I know these change production notes. If the safe set holds anything else, stop and ask me first.
