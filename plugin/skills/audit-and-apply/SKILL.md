@@ -91,4 +91,4 @@ File one new issue in the Project config tracker for every risky and skip findin
 
 If nothing remains, file nothing and say so. Then comment on the audit issue with links to the remainder issue and to the ledger or chore PR.
 
-Finish with one short report: consumers checked, findings per class, what was applied and through which gate (ledger or PR link), the re-diff result as matched and unmatched counts, and the remainder issue's link (S5).
+Finish with one short report: consumers checked, findings per class, what was applied and through which gate (ledger or PR link), the re-diff result as "<n> matched, <m> unmatched", and the remainder issue's link (S5).
