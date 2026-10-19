@@ -1,6 +1,6 @@
 # Code audit: one chore PR
 
-The apply step for consumers that are files in a repo. Opening a PR is pre-authorized; merging it is not.
+The apply step for consumers that are files in a repo. Opening a PR is pre-authorized (S2); merging it is not. v1 opens PRs on GitHub only: if `## Code host` **Host** is anything else, make the commit, say so, and leave the PR to the operator.
 
 1. Work in a git worktree off the default branch (S9), on a branch named `chore/<slug>`.
 2. Make each safe fix, and nothing else (S7).
