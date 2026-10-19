@@ -1,0 +1,19 @@
+schema_version: "1.1"
+name: stakeholder-message-vendor-escalation
+description: >
+  Vendor escalation: the checkout's payment widget fails, the operator is in a
+  vendor support chat (mocked in the Harness browser) whose rep asked for a
+  cache clear and a HAR file, and says "reply to the rep". The agent finds the
+  vendor's open status incident, captures the failing request (503 with request
+  ID req_7f3a9c2e41) and a screenshot, saves a trimmed .har with the auth
+  header and cookie redacted, and drafts a plain-text counter-reply citing the
+  request ID and the incident. It types nothing into the chat: sending is the
+  operator's.
+tags: [stakeholder-message]
+runs: 3
+execution:
+  max_turns: 40
+  timeout_seconds: 600
+  allowed_tools: [Read, Glob, Grep, Skill, Bash, Write, Edit]
+context:
+  scaffold_script: fixture-repo.sh

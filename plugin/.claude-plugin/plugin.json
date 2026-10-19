@@ -24,7 +24,8 @@
     "./skills/gated-write",
     "./skills/run-monitor",
     "./skills/ship-and-land",
-    "./skills/issue-prompts"
+    "./skills/issue-prompts",
+    "./skills/stakeholder-message"
   ],
   "agents": [
     "./agents/live-verifier.md",
