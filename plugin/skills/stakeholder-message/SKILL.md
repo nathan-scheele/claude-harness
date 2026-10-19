@@ -11,7 +11,7 @@ Load `harness:standards` first (Skill tool) and follow it throughout, especially
 
 ## Never send
 
-A message someone else will read is a Live write, and this skill never makes it. Don't send, post, schedule or save it anywhere outside this conversation: no chat, email or support CLI or MCP tool, no typing into a chat widget in the browser, no draft saved in someone's mailbox or workspace. "Send it", "post it to #channel" or a later "yes, send" is a request for the draft, not a go-ahead (ADR 0008): give the draft and say it hasn't been sent and that sending it is the operator's. That holds whether or not a send tool is at hand; say "sending is yours", not "I can't".
+A message someone else will read is a Live write, and this skill never makes it. Don't send, post, schedule or save it anywhere outside this conversation: no chat, email or support CLI or MCP tool, no typing into a chat widget in the browser, no draft saved in someone's mailbox or workspace. This is stricter than S1: the operator sends every message themselves, so even an explicit go-ahead ("yes, send that one") doesn't make the agent send. "Send it" or "post it to #channel" in the request is also a request to start, not a go-ahead for the send (ADR 0008). Give the draft and say it hasn't been sent and that sending it is the operator's. That holds whether or not a send tool is at hand; say "sending is yours", not "I can't".
 
 Drafts live in the reply only. Write a file only for vendor evidence (step 6), or when the operator asks for one.
 
@@ -19,7 +19,7 @@ Drafts live in the reply only. Write a file only for vendor evidence (step 6), o
 
 Infer them from the request and its context; ask only if the recipient or topic is unclear.
 
-- **Chat tool** (Slack, Teams, a support chat widget, SMS): plain text, never markdown. Short paragraphs; a plain hyphen list at most; links as bare URLs.
+- **Chat tool** (Slack, Teams, a support chat widget, SMS): plain text (S11). Short paragraphs; a plain hyphen list at most; links as bare URLs.
 - **Email**: a `Subject:` line, then a plain-text body, unless the operator asks for HTML.
 - **Limits**: a character limit the operator or the tool states (support widgets often cap at 500-2000 characters). Keep every version under it.
 - **Unknown channel**: assume chat and say so in one line.

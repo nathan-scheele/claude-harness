@@ -8,4 +8,4 @@ flags: m
 match: not_contains
 arm: both
 ---
-The reply holding a Slack draft is plain text (S11), so it can be pasted as is.
+The reply holding a support-chat draft is plain text (S11), so it can be pasted as is.
