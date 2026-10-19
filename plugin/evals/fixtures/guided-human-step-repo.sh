@@ -19,6 +19,9 @@
 # production secret: waiting; 3 add the bounce webhook: todo). Since then the
 # operator verified the domain, but set MAIL_API_KEY on dev instead of
 # production, so step 1 is done and step 2 is not.
+#
+# --connectors-unset: `## Data connectors` says `unset`, so no check can be
+# chosen for either vendor system.
 set -euo pipefail
 
 git init -q -b main
@@ -101,6 +104,9 @@ Systems Harness skills reach for bulk data reads and production data writes, and
 - **Tracker**: GitHub Issues
 - **Close convention**: `Closes #<n>` in the PR body
 MD
+if [ "${1:-}" = --connectors-unset ]; then
+  perl -0pi -e 's/(## Data connectors\n\n)[\s\S]*?\n(?=## Issues)/${1}unset\n\n/ or die "connectors section not found\n"' docs/agents/harness.md
+fi
 
 cat > bin/mailctl <<'SH'
 #!/usr/bin/env bash
@@ -220,6 +226,20 @@ printf 'DATABASE_URL\nSESSION_SECRET\n' > .fake-vendors/host-secrets-dev.txt
 
 git add -A
 git commit -qm "notes-web 1.5.0"
+
+# On macOS the eval sandbox blocks the Command Line Tools behind /usr/bin/git,
+# so plain git fails there. .fake-git/bin/git runs a git that works (the case
+# prompts say so); the skill needs it to find the main checkout.
+mkdir -p .fake-git/bin
+for g in /opt/homebrew/bin/git /usr/local/bin/git "$(command -v git)"; do
+  if [[ -x "$g" && ! ( "$(uname)" == Darwin && "$g" == /usr/bin/git ) ]]; then
+    printf '#!/bin/sh\nPATH="%s:$PATH" exec "%s" "$@"\n' "$(dirname "$g")" "$g" > .fake-git/bin/git
+    chmod +x .fake-git/bin/git
+    break
+  fi
+done
+[[ -x .fake-git/bin/git ]] || { echo "fixture: no git usable in the eval sandbox (on macOS, install Homebrew git)" >&2; exit 1; }
+printf '.fake-git/\n' >> .git/info/exclude
 
 [ "${1:-}" = --resume ] || exit 0
 

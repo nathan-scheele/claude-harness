@@ -1,7 +1,7 @@
 ---
 type: regex
 # Step 1's section (up to the next "## ") has Status: done.
-pattern: '## 1\.(?:(?!\n## )[\s\S])*?Status:\**\s*done\b'
+pattern: '## 1\.(?:(?!\n## )[\s\S])*?\**Status\**:\**\s*done\b'
 match: contains
 target:
   source: file
