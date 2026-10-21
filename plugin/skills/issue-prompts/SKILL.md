@@ -43,7 +43,7 @@ Done when every ready issue has the facts below, each path and symbol checked. W
 
 - The issue and its comments, its parent spec, and the ADRs and `GLOSSARY.md` sections it names.
 - Sibling work already merged: for each closed blocker, `git log origin/<Default branch> --oneline --grep '#<blocker>'`, plus its closing comments (they carry gotchas and the operator's decisions).
-- **Code to reuse**: the helpers, modules, scripts and fixtures the issue builds on. Every path or symbol a prompt names must exist on `origin/<Default branch>`: check each with `git cat-file -e origin/<Default branch>:<path>` or `git grep <symbol> origin/<Default branch>`.
+- **Code to reuse**: the helpers, modules, scripts and fixtures the issue builds on. Every path or symbol a prompt names must exist on `origin/<Default branch>`: check each with `git cat-file -e origin/<Default branch>:<path>` or `git grep <symbol> origin/<Default branch>`. A command that reaches outside the repo (source material in another checkout) spells its path out in full, from `/`: a Lane runs in a worktree-isolated session, which refuses a git command whose path it can't resolve before running, such as one starting `~`.
 - Open PRs touching the same area.
 - Earlier prompts in the same group folder (step 5): match their style and keep continuity.
 
