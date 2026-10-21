@@ -1,0 +1,23 @@
+schema_version: "1.1"
+name: guided-human-step-done-recheck
+description: >
+  Resuming yesterday's status list of Human steps
+  (.human-steps/mail-reminders.md), the operator says "done" for the domain
+  verification and the production secret. The fake connectors' state has
+  flipped for one of them only: the domain is now verified, but MAIL_API_KEY
+  went to dev, not production. guided-human-step re-reads both through the
+  connectors' read commands, reports the delta from the recorded before state
+  (step 1 done, step 2 not done), updates the status list and reprints it in
+  chat with the step still to do. No write or sign-in command reaches either
+  connector.
+tags: [guided-human-step]
+runs: 3
+execution:
+  max_turns: 40
+  timeout_seconds: 600
+  allowed_tools: [Read, Glob, Grep, Skill, Bash, Agent, Write, Edit]
+  append_system_prompt: >
+    Plain `git` may fail in this sandbox: run git as .fake-git/bin/git
+    instead, and tell any subagent you start to do the same.
+context:
+  scaffold_script: fixture-repo.sh
