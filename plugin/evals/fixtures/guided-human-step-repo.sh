@@ -227,18 +227,9 @@ printf 'DATABASE_URL\nSESSION_SECRET\n' > .fake-vendors/host-secrets-dev.txt
 git add -A
 git commit -qm "notes-web 1.5.0"
 
-# On macOS the eval sandbox blocks the Command Line Tools behind /usr/bin/git,
-# so plain git fails there. .fake-git/bin/git runs a git that works (the case
-# prompts say so); the skill needs it to find the main checkout.
-mkdir -p .fake-git/bin
-for g in /opt/homebrew/bin/git /usr/local/bin/git "$(command -v git)"; do
-  if [[ -x "$g" && ! ( "$(uname)" == Darwin && "$g" == /usr/bin/git ) ]]; then
-    printf '#!/bin/sh\nPATH="%s:$PATH" exec "%s" "$@"\n' "$(dirname "$g")" "$g" > .fake-git/bin/git
-    chmod +x .fake-git/bin/git
-    break
-  fi
-done
-[[ -x .fake-git/bin/git ]] || { echo "fixture: no git usable in the eval sandbox (on macOS, install Homebrew git)" >&2; exit 1; }
+# A git that works in the eval sandbox (the case prompts say so); the skill
+# needs it to find the main checkout.
+bash "$(dirname "${BASH_SOURCE[0]}")/sandbox-git.sh" .fake-git/bin/git
 printf '.fake-git/\n' >> .git/info/exclude
 
 [ "${1:-}" = --resume ] || exit 0

@@ -168,18 +168,8 @@ MERGE_SHA=5d1e0c4b7a9f3e2d8c6b1a0f9e8d7c6b5a4f3e2d
 mkdir -p .fake-gh/bin .fake-gh/runs .fake-gh/prs
 cp "$FAKE" .fake-gh/bin/gh
 chmod +x .fake-gh/bin/gh
-# On macOS the eval sandbox blocks the Command Line Tools behind /usr/bin/git,
-# so plain git fails there. .fake-gh/bin/git runs a git that works, with its
-# directory first on PATH so the git-receive-pack a push to the local origin
-# spawns is that git's too.
-for g in /opt/homebrew/bin/git /usr/local/bin/git "$(command -v git)"; do
-  if [[ -x "$g" && ! ( "$(uname)" == Darwin && "$g" == /usr/bin/git ) ]]; then
-    printf '#!/bin/sh\nPATH="%s:$PATH" exec "%s" "$@"\n' "$(dirname "$g")" "$g" > .fake-gh/bin/git
-    chmod +x .fake-gh/bin/git
-    break
-  fi
-done
-[[ -x .fake-gh/bin/git ]] || { echo "fixture: no git usable in the eval sandbox (on macOS, install Homebrew git)" >&2; exit 1; }
+# A git that works in the eval sandbox, and with pushes to the local origin.
+bash "$(dirname "${BASH_SOURCE[0]}")/sandbox-git.sh" .fake-gh/bin/git
 : > .fake-gh/calls.log
 printf 'example-org/notes-api\n' > .fake-gh/repo
 printf '12\n' > .fake-gh/next-pr
