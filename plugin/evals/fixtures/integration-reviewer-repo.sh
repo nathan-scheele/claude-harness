@@ -188,12 +188,5 @@ git add -A
 git commit -qm "Push plan changes to the CRM"
 
 # A git that works in the eval sandbox (see the header).
-for g in /opt/homebrew/bin/git /usr/local/bin/git "$(command -v git)"; do
-  if [[ -x "$g" && ! ( "$(uname)" == Darwin && "$g" == /usr/bin/git ) ]]; then
-    printf '#!/bin/sh\nexec "%s" "$@"\n' "$g" > .tools/git
-    chmod +x .tools/git
-    break
-  fi
-done
-[[ -x .tools/git ]] || { echo "fixture: no git usable in the eval sandbox (on macOS, install Homebrew git)" >&2; exit 1; }
+bash "$(dirname "${BASH_SOURCE[0]}")/sandbox-git.sh" .tools/git
 echo .tools/ >> .git/info/exclude
