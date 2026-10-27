@@ -1,8 +1,8 @@
 #!/usr/bin/env node
-// Re-grades saved eval traces offline, with no model calls, so a grader can be
-// written or fixed red/green against real runs instead of rerunning the case.
+// Re-grades saved eval traces offline, so a grader can be written or fixed
+// red/green against real runs instead of rerunning the case.
 //
-// usage: scripts/check-graders.mjs <case name or case dir> [traces dir]
+// usage: scripts/check-graders.mjs <case name or case dir> [traces dir] [--llm [--judge-model <model>]]
 //
 // Traces come from scripts/run-evals.sh (save-eval-traces.sh), by default from
 // plugin/evals/results/traces/<case>/<arm>-<n>/. Prints one row per grader and
@@ -10,18 +10,37 @@
 // grading the same run, reached the other verdict: the grader changed since,
 // or this checker reads it differently from the runner.
 //
-// Checks regex graders on the trace, the last message and mock calls,
-// tool_used and tool_order. Skips llm graders (they need a model), and
-// file_exists and file-target regex graders (workspace files aren't saved).
+// Checks regex graders on the trace, the last message, mock calls and the
+// workspace files save-eval-traces.sh kept (a file the run didn't make reads
+// as empty), tool_used and tool_order, with no model calls. With --llm it also
+// runs each llm grader's judge three times per run, as the runner does, and
+// takes the majority; a split vote shows its PASS count, e.g. FAIL(1/3). The
+// judge is `claude -p` on the runner's default judge model (haiku), or the
+// command in CHECK_GRADERS_JUDGE, which reads the prompt on stdin and starts
+// its answer with PASS or FAIL. Skips file_exists graders: a saved file
+// doesn't say whether the run or the fixture made it.
+import { spawnSync } from "node:child_process";
 import { existsSync, readdirSync, readFileSync } from "node:fs";
 import { basename, dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 
+const JUDGE_VOTES = 3;
+
 function main() {
-  const [caseArg, tracesArg] = process.argv.slice(2);
-  if (!caseArg) return usage("usage: scripts/check-graders.mjs <case name or case dir> [traces dir]");
+  const args = process.argv.slice(2);
+  const opts = { llm: false, judgeModel: "haiku" };
+  const positional = [];
+  for (let i = 0; i < args.length; i++) {
+    if (args[i] === "--llm") opts.llm = true;
+    else if (args[i] === "--judge-model") opts.judgeModel = args[++i];
+    else positional.push(args[i]);
+  }
+  const [caseArg, tracesArg] = positional;
+  if (!caseArg) {
+    return usage("usage: scripts/check-graders.mjs <case name or case dir> [traces dir] [--llm [--judge-model <model>]]");
+  }
   const caseDir = caseArg.includes("/") ? resolve(caseArg) : join(ROOT, "plugin/evals", caseArg);
   const name = basename(caseDir);
   const tracesDir = tracesArg ? resolve(tracesArg) : join(ROOT, "plugin/evals/results/traces", name);
@@ -36,19 +55,23 @@ function main() {
   const graders = readdirSync(join(caseDir, "graders"))
     .filter((f) => f.endsWith(".md"))
     .sort()
-    .map((f) => ({ name: f.slice(0, -3), spec: frontmatter(readFileSync(join(caseDir, "graders", f), "utf8")) }));
+    .map((f) => {
+      const text = readFileSync(join(caseDir, "graders", f), "utf8");
+      return { name: f.slice(0, -3), spec: { ...frontmatter(text), body: body(text) } };
+    });
   const skipped = new Map();
   const rows = graders.map((g) => [
     g.name,
     ...runs.map((run) => {
       const dir = join(tracesDir, run);
-      const verdict = grade(g.spec, loadRun(dir));
-      if (typeof verdict === "string") {
-        skipped.set(g.name, verdict);
+      const result = grade(g.spec, loadRun(dir), opts);
+      if (typeof result === "string") {
+        skipped.set(g.name, result);
         return "skip";
       }
+      const { pass, label } = typeof result === "boolean" ? { pass: result, label: "" } : result;
       const runner = runnerVerdict(dir, g.name);
-      return (verdict ? "PASS" : "FAIL") + (runner !== undefined && runner !== verdict ? "*" : "");
+      return (pass ? "PASS" : "FAIL") + label + (runner !== undefined && runner !== pass ? "*" : "");
     }),
   ]);
 
@@ -84,7 +107,13 @@ function loadRun(dir) {
     }
   });
   const mocks = join(dir, "mock-calls.jsonl");
-  return { text, messages, mockCalls: existsSync(mocks) ? readFileSync(mocks, "utf8") : "" };
+  const workspace = join(dir, "workspace");
+  return {
+    text,
+    messages,
+    mockCalls: existsSync(mocks) ? readFileSync(mocks, "utf8") : "",
+    workspace: existsSync(workspace) ? workspace : null,
+  };
 }
 
 function runnerVerdict(dir, grader) {
@@ -93,8 +122,9 @@ function runnerVerdict(dir, grader) {
   return JSON.parse(readFileSync(file, "utf8")).find((g) => g.name === grader)?.passed;
 }
 
-// true or false, or a string saying why the grader can't be checked offline.
-function grade(spec, run) {
+// true or false, { pass, label } for a judged llm grader, or a string saying
+// why the grader can't be checked offline.
+function grade(spec, run, opts) {
   switch (spec.type) {
     case "regex":
       return gradeRegex(spec, run);
@@ -109,9 +139,9 @@ function grade(spec, run) {
       return before >= 0 && after >= 0 && before < after;
     }
     case "llm":
-      return "llm graders need a model";
+      return opts.llm ? judge(spec, run, opts) : "llm graders need a model: add --llm to run the judge";
     case "file_exists":
-      return "workspace files aren't saved with the trace";
+      return "a saved workspace file doesn't say whether the run or the fixture made it";
     default:
       return `unknown grader type ${spec.type}`;
   }
@@ -123,14 +153,50 @@ function gradeRegex(spec, run) {
   if (target === "trace") text = run.text;
   else if (target === "mock_calls") text = run.mockCalls;
   else if (target === "last_message") text = lastMessage(run);
-  else if (typeof target === "object") return "file targets read workspace files, and workspace files aren't saved";
-  else return `unknown regex target ${target}`;
+  else if (typeof target === "object") {
+    if (!run.workspace) return "this run's traces were saved without its workspace files; rerun the case to get them";
+    const file = join(run.workspace, String(target.path));
+    text = existsSync(file) ? readFileSync(file, "utf8") : "";
+  } else return `unknown regex target ${target}`;
   const flags = String(spec.flags ?? "");
   const match = String(spec.match ?? "contains");
   const count = match.match(/^count:(\d+)$/);
   if (count) return (text.match(new RegExp(spec.pattern, flags.includes("g") ? flags : flags + "g")) ?? []).length === Number(count[1]);
   const found = new RegExp(spec.pattern, flags).test(text);
   return match === "not_contains" ? !found : found;
+}
+
+// Runs the llm grader's judge JUDGE_VOTES times on what the runner shows it
+// (the focus) and takes the majority, or says why it couldn't.
+function judge(spec, run, opts) {
+  const focus = String(spec.focus ?? "last_message");
+  let evidence;
+  if (focus === "last_message") evidence = lastMessage(run);
+  else if (focus === "mock_calls") evidence = run.mockCalls;
+  else if (focus === "trace") {
+    // The runner's judge sees only the first and last 12 messages.
+    const lines = run.text.split("\n").filter(Boolean);
+    evidence = (lines.length > 24 ? [...lines.slice(0, 12), "…", ...lines.slice(-12)] : lines).join("\n");
+  } else return `unknown llm focus ${focus}`;
+  const prompt =
+    "You are grading one run of an automated test of a Claude Code plugin. Apply the grading instructions to the evidence.\n\n" +
+    `Grading instructions:\n${spec.body.trim()}\n\nEvidence (${focus}):\n${evidence}\n\n` +
+    "Answer with PASS or FAIL as your first word, then one sentence saying why.";
+  let passes = 0;
+  for (let i = 0; i < JUDGE_VOTES; i++) {
+    const r = process.env.CHECK_GRADERS_JUDGE
+      ? spawnSync(process.env.CHECK_GRADERS_JUDGE, { input: prompt, encoding: "utf8", shell: true, timeout: 120_000 })
+      : spawnSync(
+          "claude",
+          ["-p", "--model", opts.judgeModel, "--tools", "", "--strict-mcp-config", "--no-session-persistence"],
+          { input: prompt, encoding: "utf8", timeout: 120_000 },
+        );
+    const vote = String(r.stdout ?? "").trim().match(/^\W*(PASS|FAIL)\b/i)?.[1]?.toUpperCase();
+    if (!vote) return `the judge gave no PASS or FAIL (${String(r.stderr || r.stdout || r.error || "").trim().slice(0, 120)})`;
+    if (vote === "PASS") passes++;
+  }
+  const pass = passes * 2 > JUDGE_VOTES;
+  return { pass, label: passes === 0 || passes === JUDGE_VOTES ? "" : `(${passes}/${JUDGE_VOTES})` };
 }
 
 function lastMessage(run) {
@@ -180,6 +246,11 @@ function frontmatter(text) {
     }
   }
   return spec;
+}
+
+// A grader file's text after its frontmatter: an llm grader's judge prompt.
+function body(text) {
+  return text.replace(/^---\n[\s\S]*?\n---\n?/, "");
 }
 
 function scalar(src) {
