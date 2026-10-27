@@ -25,7 +25,8 @@
     "./skills/run-monitor",
     "./skills/ship-and-land",
     "./skills/issue-prompts",
-    "./skills/guided-human-step"
+    "./skills/guided-human-step",
+    "./skills/cross-system-trace"
   ],
   "agents": [
     "./agents/live-verifier.md",

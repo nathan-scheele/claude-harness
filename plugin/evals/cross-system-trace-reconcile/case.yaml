@@ -1,0 +1,18 @@
+schema_version: "1.1"
+name: cross-system-trace-reconcile
+description: >
+  Reconcile mode. The notes database (system of record, 60 notes) and the
+  search index (58 docs, upper-case ids, two titles with trailing spaces)
+  disagree. The agent pulls each side in bulk through data-digest, settles the
+  key and normalisation so case and whitespace aren't counted, and reports
+  counts per category (4 missing in the index, 2 missing in the notes
+  database, 6 mismatched, 50 matching) plus one CSV of the discrepancies with
+  a reason column. No write or dry-run call reaches either system.
+tags: [cross-system-trace]
+runs: 3
+execution:
+  max_turns: 60
+  timeout_seconds: 900
+  allowed_tools: [Read, Glob, Grep, Skill, Bash, Agent, Write]
+context:
+  scaffold_script: fixture-repo.sh
