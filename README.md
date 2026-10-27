@@ -87,7 +87,7 @@ scripts/test-release-check.sh            # release-check tests
 scripts/release-check.sh . v0.1.0        # before tagging: plugin version is the newest CHANGELOG entry and matches the tag
 scripts/leak-check.sh .                  # fail on emails, home paths, store domains, theme IDs, account subdomains, chat and resource IDs
 scripts/run-evals.sh --case <name>       # behavioural evals vs a no-plugin baseline (uses your Claude credentials); saves traces
-scripts/check-graders.mjs <case>         # re-grade a case's saved traces offline
+scripts/check-graders.mjs <case> [--llm] # re-grade a case's saved traces offline (--llm also runs the judges)
 ```
 
 CI runs strict validation, the leak check and the release check (without a tag) on every push and PR. Private identifiers the leak check must catch but this public repo must not contain (a work domain, a store name) go in the `LEAK_PATTERNS` repository secret, one extended regex per line.
