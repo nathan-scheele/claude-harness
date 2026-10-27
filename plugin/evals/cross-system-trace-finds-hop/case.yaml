@@ -1,0 +1,19 @@
+schema_version: "1.1"
+name: cross-system-trace-finds-hop
+description: >
+  "X isn't syncing" across two systems. A note archived in the notes database
+  (the system of record) still shows in search, because the sync job pushes
+  only active notes, so the search index keeps it active. The agent reads the
+  failing note in both systems through their connectors, names the sync as the
+  first divergence, finds the sibling notes with the same defect (n03, n17),
+  and separates the data fix (through gated-write, not run) from the code fix,
+  offering to file the code fix without filing it. No write or dry-run call
+  reaches either system.
+tags: [cross-system-trace]
+runs: 3
+execution:
+  max_turns: 40
+  timeout_seconds: 600
+  allowed_tools: [Read, Glob, Grep, Skill, Bash, Agent]
+context:
+  scaffold_script: fixture-repo.sh
