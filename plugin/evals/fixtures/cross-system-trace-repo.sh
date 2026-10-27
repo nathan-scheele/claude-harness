@@ -30,12 +30,16 @@
 #   mismatched: 6 (status archived vs active: n03 n14 n17 n30; title: n09 n40)
 #   matching: 50
 # Graders hold these numbers.
+#
+# --connectors-unset: as the default, but `## Data connectors` says `unset`,
+# so neither system can be read through a connector.
 set -euo pipefail
 
 bash "$(dirname "${BASH_SOURCE[0]}")/gated-write-repo.sh"
 
-reconcile=0
+reconcile=0 unset=0
 [ "${1:-}" = --reconcile ] && reconcile=1
+[ "${1:-}" = --connectors-unset ] && unset=1
 
 # Production notes n13-n20, then n21-n60 for --reconcile.
 cat >> .notes-db/production.tsv <<'TSV'
@@ -222,6 +226,9 @@ connector='- **Notes database**: CLI `bin/notes-db` (`--env production`, the def
 replacement="$connector; reads: \`list\`, \`get\`
 - **Search index**: CLI \`bin/search-index\`; read-write; reads: \`status\`, \`list\`, \`get\`"
 CONNECTOR="$connector" REPLACEMENT="$replacement" perl -0pi -e 's/\Q$ENV{CONNECTOR}\E/$ENV{REPLACEMENT}/ or die "connector line not found\n"' docs/agents/harness.md
+if [ "$unset" = 1 ]; then
+  perl -0pi -e 's/(## Data connectors\n\n)[\s\S]*?\n(?=## Issues)/${1}unset\n\n/ or die "connectors section not found\n"' docs/agents/harness.md
+fi
 
 git add -A
 git commit -qm "Search index and its sync job"
