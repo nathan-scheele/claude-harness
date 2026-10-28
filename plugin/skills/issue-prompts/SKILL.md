@@ -73,7 +73,7 @@ Done when every ready issue has the facts below, each path and symbol checked. W
 - Design question: <question>, settled in the plan.
 - Test-first: <edge cases>.
 - Parallel: #<m> is being built at the same time; <overlap and what to do about it>.
-- After the review: run <each ## Pre-flight command, in order>, commit, list open PRs for overlap as a separate step, then open a PR whose body <## Issues Close convention, e.g. says Closes #<n>>.
+- After the review: fetch and rebase onto `origin/<Default branch>` (siblings may have landed new checks), run <each ## Pre-flight command, in order>, commit, list open PRs for overlap as a separate step, then open a PR whose body <## Issues Close convention, e.g. says Closes #<n>>.
 
 Gotchas from #<a>: <quirks and operator rules that apply>.
 ```
@@ -82,7 +82,7 @@ Gotchas from #<a>: <quirks and operator rules that apply>.
 
 - Issue labelled with the `needs-triage` role: open with `/mattpocock-skills:triage Let's look at #<n>`, then spell out implement's steps after it.
 - Otherwise open with `/mattpocock-skills:implement`.
-- If that skill isn't installed or the check fails (the Base layer tracks its main branch, so skills get renamed), open with "Implement GitHub issue #<n> …" and spell out the steps: plan (settle the design questions), build test-first with the tdd skill, run the Pre-flight commands, review with the code-review skill, commit, PR.
+- If that skill isn't installed or the check fails (the Base layer tracks its main branch, so skills get renamed), open with "Implement GitHub issue #<n> …" and spell out the steps: plan (settle the design questions), build test-first with the tdd skill, review with the code-review skill, rebase onto `origin/<Default branch>`, run the Pre-flight commands, commit, PR.
 
 **`README.md`** in the group folder: keep earlier waves; add a dated section with this wave's launch lines, and end with a `Later:` line listing what's still blocked and on what.
 
