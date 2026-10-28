@@ -3,8 +3,9 @@
 # run's trace after `claude plugin eval` finishes) and scripts/check-graders.mjs
 # (re-grades saved traces offline). Each case builds a throwaway runner result
 # and trace, runs the tool and asserts on its output and the files it leaves.
-# Last, two checks over the real cases: every grader parses, and every skill
-# or subagent that stops for setup has a needs-config case.
+# Then run-evals.sh's lock, with a fake claude. Last, two checks over the real
+# cases: every grader parses, and every skill or subagent that stops for setup
+# has a needs-config case.
 # Needs jq and node. Runs the save script with /bin/bash so macOS CI exercises
 # the system bash 3.2.
 set -uo pipefail
@@ -244,6 +245,36 @@ ok_if "--llm: still skips file_exists" test "$(row exists)" = "skip skip"
 out="$(node "$HERE/check-graders.mjs" "$CASE" "$WORK/no-such-dir" 2>&1)"
 code=$?
 ok_if "no traces: exits 2 and says how to get them" test "$code" -eq 2 -a -n "$(grep -F 'run-evals.sh' <<<"$out")"
+
+echo "# run-evals.sh runs one at a time"
+# A copy outside git, so its lock falls back to its own results dir, with a
+# fake claude that only records the call.
+R="$WORK/lock-repo"
+mkdir -p "$R/scripts" "$WORK/fake-bin"
+cp "$HERE/run-evals.sh" "$R/scripts/"
+printf '#!/bin/sh\necho called >> "%s/claude-calls"\n' "$WORK" > "$WORK/fake-bin/claude"
+chmod +x "$WORK/fake-bin/claude"
+LOCK="$R/plugin/evals/results/run-evals.lock"
+evals() { PATH="$WORK/fake-bin:$PATH" bash "$R/scripts/run-evals.sh" --case x 2>&1; }
+
+sh -c 'exit 0' & gone=$!
+wait "$gone"
+mkdir -p "$LOCK" && echo "$gone" > "$LOCK/pid"
+out="$(evals)"
+ok_if "takes over a lock whose holder has exited, and releases it" test "$(cat "$WORK/claude-calls" 2>/dev/null)" = called -a ! -e "$LOCK"
+
+rm -f "$WORK/claude-calls"
+sleep 30 & holder=$!
+mkdir -p "$LOCK" && echo "$holder" > "$LOCK/pid"
+evals > "$WORK/lock-wait.log" & run=$!
+sleep 2
+out="$(cat "$WORK/lock-wait.log")"
+ok_if "waits while another run holds the lock" test ! -e "$WORK/claude-calls" -a -n "$(grep -F 'waiting for another eval run' <<<"$out")"
+kill "$holder"
+wait "$holder" 2>/dev/null
+wait "$run"
+out="$(cat "$WORK/lock-wait.log")"
+ok_if "runs once the holder exits, and releases the lock" test -e "$WORK/claude-calls" -a ! -e "$LOCK"
 
 echo "# check-graders.mjs reads every grader in the repo"
 mkdir -p "$WORK/empty-run/with-1" && printf '{"type":"result","result":""}\n' > "$WORK/empty-run/with-1/trace.jsonl"

@@ -15,7 +15,7 @@ plugin/evals/<case>/
 
 Each case runs `runs` times with the plugin and `runs` times without it (the baseline arm). `scripts/run-evals.sh` fails unless every run passes every scored grader and the plugin beats the baseline.
 
-- **Running.** `scripts/run-evals.sh --case <name>`; one `--case` per call (a second replaces the first), so run cases one after another. `--help` prints the runner's options. Runs use real Claude sessions on your credentials: a three-run case is six sessions.
+- **Running.** `scripts/run-evals.sh --case <name>`; one `--case` per call (a second replaces the first), so run cases one after another. `--help` prints the runner's options. Runs use real Claude sessions on your credentials: a three-run case is six sessions. Runs from parallel worktrees queue: a second `run-evals.sh` waits until the first finishes, since concurrent runs stall each other's sessions. A wait longer than one case is another worktree's run, not a hang.
 - **`execution.env`** accepts only `EVAL_*` keys, so nothing can be put on the agent's PATH; fixtures install fakes in the workspace and `append_system_prompt` tells the agent to run them by path (ADR 0007).
 - **Tools.** Bash, Write and Edit need both the case's `allowed_tools` and `--allow-tools` (run-evals.sh grants all three to the run).
 - **Headless.** No AskUserQuestion: cases assert the Standards' fallback (numbered options in the last message).
