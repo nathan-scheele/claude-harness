@@ -14,6 +14,8 @@
 #          n17 no owner (choosing one is a person's call; no CLI command sets it)
 #   skip   n16 Archived but on legal hold (frozen: never changed)
 # Graders hold these ids. The local tracker's next new issue is 14.
+#
+# --connectors-unset: `## Data connectors` says `unset` instead.
 set -euo pipefail
 
 bash "$(dirname "${BASH_SOURCE[0]}")/gated-write-repo.sh"
@@ -42,7 +44,12 @@ printf '%s\n' "$notes" > .notes-db/production.tsv
 printf '%s\n' "$notes" > .notes-db/staging.tsv
 
 connector='- **Notes database**: CLI `bin/notes-db` (`--env production`, the default, or `--env staging`); read-write'
-CONNECTOR="$connector" REPLACEMENT="$connector; reads: \`list\`, \`get\`" perl -0pi -e 's/\Q$ENV{CONNECTOR}\E/$ENV{REPLACEMENT}/ or die "connector line not found\n"' docs/agents/harness.md
+if [ "${1:-}" = --connectors-unset ]; then
+  replacement='unset'
+else
+  replacement="$connector; reads: \`list\`, \`get\`"
+fi
+CONNECTOR="$connector" REPLACEMENT="$replacement" perl -0pi -e 's/\Q$ENV{CONNECTOR}\E/$ENV{REPLACEMENT}/ or die "connector line not found\n"' docs/agents/harness.md
 
 cat > docs/notes-checklist.md <<'MD'
 # Notes checklist
