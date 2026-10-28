@@ -227,7 +227,7 @@ case "$in" in
   *GREETCHECK*) grep -q 'Hi THERE' <<<"$in" && echo "PASS: greets" || echo "FAIL: no greeting" ;;
   *TRACECHECK*) grep -q 'set-status' <<<"$in" && echo "PASS" || echo "FAIL" ;;
   *SPLITCHECK*) n=$(( $(cat "$dir/split-count" 2>/dev/null || echo 0) + 1 )); echo "$n" > "$dir/split-count"
-                [ $((n % 3)) -eq 1 ] && echo "PASS" || echo "FAIL" ;;
+                [ $((n % 3)) -eq 1 ] && echo "PASS" || echo "FAIL. The vote $n split." ;;
   *) echo "I am not sure." ;;
 esac
 SH
@@ -241,6 +241,8 @@ ok_if "--llm: three votes, majority wins, a split shows the count" test "$(row j
 ok_if "--llm: a judge with no verdict is a skip, not a pass" test "$(row judge-garbled)" = "skip skip"
 ok_if "--llm: the judge sees the grader's conditions" grep -qF 'PASS if the message greets the operator.' "$WORK/judge-input.log"
 ok_if "--llm: still skips file_exists" test "$(row exists)" = "skip skip"
+ok_if "--llm: lists the judge's reason for each FAIL vote on a with-plugin run" has "judge-split with-1: The vote 2 split."
+ok_if "--llm: leaves out the baseline's FAIL reasons" test -z "$(grep -F 'no greeting' <<<"$out")"
 
 out="$(node "$HERE/check-graders.mjs" "$CASE" "$WORK/no-such-dir" 2>&1)"
 code=$?
@@ -276,6 +278,30 @@ wait "$run"
 out="$(cat "$WORK/lock-wait.log")"
 ok_if "runs once the holder exits, and releases the lock" test -e "$WORK/claude-calls" -a ! -e "$LOCK"
 
+echo "# run-evals.sh logs the runner's output and prints a summary"
+# A fake claude that prints noise, writes a result JSON with one failing
+# grader per arm, and exits 1 as the runner does when a case fails.
+cp "$HERE/save-eval-traces.sh" "$R/scripts/"
+cat > "$WORK/fake-bin/claude" <<'SH'
+#!/bin/sh
+echo "RUNNER NOISE"
+while [ $# -gt 0 ]; do [ "$1" = --json ] && out="$2"; shift; done
+cat > "$out" <<'JSON'
+{"aggregates":{"meanDelta":0.5},"cases":[{"name":"x","graders":[],"arms":{
+ "with":[{"graders":[{"name":"g1","passed":true},{"name":"g2","passed":false,"explanation":"pattern not\nfound"},{"name":"loaded","passed":true,"scored":false}]}],
+ "without":[{"graders":[{"name":"g1","passed":false},{"name":"g2","passed":false}]}]}}]}
+JSON
+exit 1
+SH
+out="$(evals)"
+code=$?
+ok_if "exits non-zero when the runner did" test "$code" -ne 0
+ok_if "one line per run, scored graders only" has "x with-1: 1/2"
+ok_if "baseline runs get a line too" has "x without-1: 0/2"
+ok_if "names each failing grader of a with-plugin run, on one line" has "  FAIL g2: pattern not found"
+ok_if "leaves out the baseline's failures" test -z "$(grep -F 'FAIL g1' <<<"$out")"
+ok_if "the runner's output goes to the log, not the screen" test -z "$(grep -F 'RUNNER NOISE' <<<"$out")" -a -n "$(grep -F 'RUNNER NOISE' "$R/plugin/evals/results/run.log")"
+
 echo "# check-graders.mjs reads every grader in the repo"
 mkdir -p "$WORK/empty-run/with-1" && printf '{"type":"result","result":""}\n' > "$WORK/empty-run/with-1/trace.jsonl"
 unread=""
@@ -310,6 +336,26 @@ out="missing a needs-config case:$missing"
 ok_if "each has a <name>-needs-config or -needs-setup case" test -z "$missing"
 out="has its case now, remove from KNOWN_GAPS:$stale"
 ok_if "KNOWN_GAPS lists only real gaps" test -z "$stale"
+
+echo "# every skill or subagent that hands off to gated-write proves it writes nothing first"
+# One that names harness:gated-write reaches a data connector before the gate,
+# so one of its cases needs a regex grader with `match: not_contains` on a
+# workspace file (a fake's call log, e.g. `WRITE|DRYRUN` in .notes-db/calls.log).
+# Exempt: issue-prompts only writes prompt files that mention it.
+EXEMPT=" issue-prompts "
+missing=""
+for f in "$HERE"/../plugin/skills/*/SKILL.md "$HERE"/../plugin/agents/*.md; do
+  case "$f" in */SKILL.md) n="$(basename "$(dirname "$f")")" ;; *) n="$(basename "$f" .md)" ;; esac
+  grep -q 'harness:gated-write' "$f" || continue
+  [[ "$EXEMPT" == *" $n "* ]] && continue
+  found=""
+  for g in "$HERE/../plugin/evals/$n"-*/graders/*.md; do
+    [[ -f "$g" ]] && grep -q 'match: not_contains' "$g" && grep -q 'path: .*calls\.log' "$g" && { found=1; break; }
+  done
+  [[ -n "$found" ]] || missing="$missing $n"
+done
+out="no case asserts the connector log is never written:$missing"
+ok_if "each has a not_contains grader on a fake's call log" test -z "$missing"
 
 if [[ $failures -gt 0 ]]; then
   echo "$failures failure(s)"

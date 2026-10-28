@@ -76,9 +76,9 @@ Before merging, read the PR's state again (S3): still open, still mergeable, hea
 
 ## 6. Merge
 
-Merge with **Method** from Project config (never another method, never an admin override of failing checks or branch rules). Don't delete the branch unless the operator asks. Post one line: merged, the merge commit (short SHA) and the PR link.
+Merge with **Method** from Project config (never another method, never an admin override of failing checks or branch rules), pinned to the full `headRefOid` from step 5's re-read, so the host refuses the merge if anything was pushed since. Don't delete the branch unless the operator asks. Post one line: merged, the merge commit (short SHA) and the PR link.
 
-If the merge is refused (a required check, a review rule, the branch is behind), report the reason and stop; updating the branch means a new head, so it goes back through step 4.
+If the merge is refused (a required check, a review rule, the branch is behind, the head moved), report the reason and stop; updating the branch means a new head, so it goes back through step 4.
 
 ## 7. Watch CI and the deploy
 
@@ -123,7 +123,7 @@ v1 supports GitHub through the `gh` CLI. Every code-host command ship-and-land u
 | PR checks | `gh pr checks <n> --repo <Repo>` (exit 8 means still pending; "no checks reported" means none fired) |
 | Runs for the PR's head | `gh run list --repo <Repo> --commit <full head sha> --json databaseId,workflowName,status,conclusion,event,url` |
 | Rerun failed PR jobs (flake) | `gh run rerun <id> --repo <Repo> --failed` |
-| Merge (after the gate) | `gh pr merge <n> --repo <Repo> --<squash or merge or rebase>` |
+| Merge (after the gate) | `gh pr merge <n> --repo <Repo> --<squash or merge or rebase> --match-head-commit <full headRefOid>` |
 | Merge commit | `gh pr view <n> --repo <Repo> --json state,mergeCommit,mergedAt` |
 | Close the issue | `gh issue close <n> --repo <Repo> --comment "<comment>"` |
 | Offer a reopen (on a yes) | `gh issue reopen <n> --repo <Repo>` |

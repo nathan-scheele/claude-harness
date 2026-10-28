@@ -14,7 +14,9 @@
 // workspace files save-eval-traces.sh kept (a file the run didn't make reads
 // as empty), tool_used and tool_order, with no model calls. With --llm it also
 // runs each llm grader's judge three times per run, as the runner does, and
-// takes the majority; a split vote shows its PASS count, e.g. FAIL(1/3). The
+// takes the majority; a split vote shows its PASS count, e.g. FAIL(1/3), and
+// the judge's reason for each FAIL vote on a with-plugin run is listed under
+// the table. The
 // judge is `claude -p` on the runner's default judge model (haiku), or the
 // command in CHECK_GRADERS_JUDGE, which reads the prompt on stdin and starts
 // its answer with PASS or FAIL. Skips file_exists graders: a saved file
@@ -60,6 +62,7 @@ function main() {
       return { name: f.slice(0, -3), spec: { ...frontmatter(text), body: body(text) } };
     });
   const skipped = new Map();
+  const failVotes = [];
   const rows = graders.map((g) => [
     g.name,
     ...runs.map((run) => {
@@ -69,7 +72,8 @@ function main() {
         skipped.set(g.name, result);
         return "skip";
       }
-      const { pass, label } = typeof result === "boolean" ? { pass: result, label: "" } : result;
+      const { pass, label, fails = [] } = typeof result === "boolean" ? { pass: result, label: "" } : result;
+      if (!run.startsWith("without")) for (const why of fails) failVotes.push(`${g.name} ${run}: ${why}`);
       const runner = runnerVerdict(dir, g.name);
       return (pass ? "PASS" : "FAIL") + label + (runner !== undefined && runner !== pass ? "*" : "");
     }),
@@ -84,6 +88,10 @@ function main() {
     console.log("\n* the runner reached the other verdict on this run (grader changed since, or read differently here)");
   }
   for (const [g, why] of skipped) console.log(`skip ${g}: ${why}`);
+  if (failVotes.length) {
+    console.log("\nthe judge's reason for each FAIL vote on a with-plugin run:");
+    for (const v of failVotes) console.log(`  ${v}`);
+  }
 }
 
 function usage(message) {
@@ -183,6 +191,7 @@ function judge(spec, run, opts) {
     `Grading instructions:\n${spec.body.trim()}\n\nEvidence (${focus}):\n${evidence}\n\n` +
     "Answer with PASS or FAIL as your first word, then one sentence saying why.";
   let passes = 0;
+  const fails = [];
   for (let i = 0; i < JUDGE_VOTES; i++) {
     const r = process.env.CHECK_GRADERS_JUDGE
       ? spawnSync(process.env.CHECK_GRADERS_JUDGE, { input: prompt, encoding: "utf8", shell: true, timeout: 120_000 })
@@ -191,12 +200,14 @@ function judge(spec, run, opts) {
           ["-p", "--model", opts.judgeModel, "--tools", "", "--strict-mcp-config", "--no-session-persistence"],
           { input: prompt, encoding: "utf8", timeout: 120_000 },
         );
-    const vote = String(r.stdout ?? "").trim().match(/^\W*(PASS|FAIL)\b/i)?.[1]?.toUpperCase();
+    const answer = String(r.stdout ?? "").trim();
+    const vote = answer.match(/^\W*(PASS|FAIL)\b/i)?.[1]?.toUpperCase();
     if (!vote) return `the judge gave no PASS or FAIL (${String(r.stderr || r.stdout || r.error || "").trim().slice(0, 120)})`;
     if (vote === "PASS") passes++;
+    else fails.push(answer.replace(/^\W*FAIL\b\W*/i, "").replace(/\s+/g, " ").slice(0, 300) || "(no reason given)");
   }
   const pass = passes * 2 > JUDGE_VOTES;
-  return { pass, label: passes === 0 || passes === JUDGE_VOTES ? "" : `(${passes}/${JUDGE_VOTES})` };
+  return { pass, label: passes === 0 || passes === JUDGE_VOTES ? "" : `(${passes}/${JUDGE_VOTES})`, fails };
 }
 
 function lastMessage(run) {
