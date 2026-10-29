@@ -25,11 +25,15 @@
     "./skills/run-monitor",
     "./skills/ship-and-land",
     "./skills/issue-prompts",
+    "./skills/guided-human-step",
+    "./skills/cross-system-trace",
+    "./skills/audit-and-apply",
     "./skills/stakeholder-message"
   ],
   "agents": [
     "./agents/live-verifier.md",
-    "./agents/data-digest.md"
+    "./agents/data-digest.md",
+    "./agents/integration-reviewer.md"
   ],
   "mcpServers": {
     "browser": {

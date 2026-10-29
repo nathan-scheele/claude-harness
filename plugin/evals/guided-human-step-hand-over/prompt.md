@@ -1,0 +1,1 @@
+PR #31 adds reminder emails. Before I merge it I have to do two things myself: get the sending domain mail.notes.example.com verified with the mail provider, and put the provider's API key into production as the MAIL_API_KEY secret (production then needs a restart to pick it up). Walk me through them.

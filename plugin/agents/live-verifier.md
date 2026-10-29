@@ -71,7 +71,7 @@ For each row decide how you will check it (browser, read-only API call, or both)
 - **On a dev target** writes are pre-authorized (S2): set up what the row needs.
 - **On a live target** you make no writes at all: no form submits, no saves, deletes, purchases or sends, no fixture setup or reset, no throwaway records. A row that can only be checked by writing is `NOT RUN`, with the reason and where it could be checked instead (a dev target, or a Human step).
 
-A **Human step** is anything only the operator can do: signing the Harness browser in to an account, a click in a vendor dashboard, a command that needs their credentials. List every Human step you need at once, each with a deep link, what to do and the end state you will check. If a check can't start without one, stop and return `Verdict: WAITING` with the list. Never type the operator's credentials or try to get around a sign-in. When you are resumed, re-read the live state to confirm each step happened before relying on it.
+A **Human step** is anything only the operator can do: signing the Harness browser in to an account, a click in a vendor dashboard, a command that needs their credentials. List every Human step you need at once, each with a deep link, what to do and the end state you will check, in the Human step format of the report below (shared with `harness:guided-human-step`, which can hand your steps to the operator and re-check them). If a check can't start without one, stop and return `Verdict: WAITING` with the list. Never type the operator's credentials or try to get around a sign-in. When you are resumed, re-read the live state to confirm each step happened before relying on it.
 
 ## 4. Set up fixtures and snapshot state (dev only)
 

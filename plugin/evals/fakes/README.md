@@ -48,7 +48,7 @@ Graders read `.fake-gh/calls.log` (one `gh <args>` line per call) with a `regex`
 
 ### Git in the eval sandbox
 
-On macOS the eval sandbox blocks the Command Line Tools behind `/usr/bin/git`, so plain `git` fails there. A fixture that needs git gives the agent a wrapper for a git that works (`.fake-gh/bin/git` in `plugin/evals/fixtures/ship-and-land-repo.sh`, which fails the case if there is none). Even then, a push that sends new commits to a local bare remote fails, because the receiving side spawns the blocked git; push the branch in the fixture so the agent's push has nothing to send. The live-verifier hook allows `gh` only by its bare name, so live-verifier can't run this fake by path: hand it the acceptance criteria instead.
+On macOS the eval sandbox blocks the Command Line Tools behind `/usr/bin/git`, so plain `git` fails there. A fixture that needs git gives the agent a wrapper for a git that works with `bash "$(dirname "${BASH_SOURCE[0]}")/sandbox-git.sh" <wrapper path>` (`plugin/evals/fixtures/sandbox-git.sh`, which fails the case if there is no such git), and its case's `append_system_prompt` tells the agent to run that path wherever it would run `git`. Even then, a push that sends new commits to a local bare remote fails, because the receiving side spawns the blocked git; push the branch in the fixture so the agent's push has nothing to send. The live-verifier hook allows `gh` only by its bare name, so live-verifier can't run this fake by path: hand it the acceptance criteria instead.
 
 ### Node in the eval sandbox
 

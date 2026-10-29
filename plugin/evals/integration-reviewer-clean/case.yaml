@@ -1,0 +1,20 @@
+schema_version: "1.1"
+name: integration-reviewer-clean
+description: >
+  Reviewing a branch whose new sync sends every CRM change through the
+  wrapper's batch method (which chunks to the documented 100 contacts, and
+  throttles and retries), maps fields as the repo's CRM docs say, and fails on
+  per-contact errors. The integration-reviewer subagent returns APPROVE with
+  no HIGH or CRITICAL finding. Nothing is edited or written.
+tags: [integration-reviewer]
+runs: 3
+execution:
+  max_turns: 40
+  timeout_seconds: 600
+  allowed_tools: [Read, Glob, Grep, Agent, Bash, Edit, Write]
+  append_system_prompt: >
+    This sandbox has no network, and plain `git` fails in it. A working git is
+    installed at .tools/git in the working directory; run it by that path
+    wherever you would run `git`.
+context:
+  scaffold_script: fixture-repo.sh

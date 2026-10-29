@@ -1,0 +1,22 @@
+schema_version: "1.1"
+name: integration-reviewer-unbatched
+description: >
+  Reviewing a branch whose new sync updates CRM contacts one request at a time
+  in a loop, where the repo's CRM docs give a batch endpoint for up to 100
+  contacts and the wrapper has a batch method. The integration-reviewer
+  subagent reads the wrapper and the docs, returns CHANGES REQUESTED with a
+  HIGH or CRITICAL finding at src/sync/push-plans.js line 8 or 9, and doesn't
+  claim missing throttling or retries (the wrapper has both). Nothing is
+  edited or written.
+tags: [integration-reviewer]
+runs: 3
+execution:
+  max_turns: 40
+  timeout_seconds: 600
+  allowed_tools: [Read, Glob, Grep, Agent, Bash, Edit, Write]
+  append_system_prompt: >
+    This sandbox has no network, and plain `git` fails in it. A working git is
+    installed at .tools/git in the working directory; run it by that path
+    wherever you would run `git`.
+context:
+  scaffold_script: fixture-repo.sh
