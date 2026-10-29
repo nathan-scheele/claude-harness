@@ -17,7 +17,7 @@ Read `docs/agents/harness.md` by heading and key:
 - `## Dev and sandbox`: whether the app has a target where writes are pre-authorized.
 - `## Issues`: **Tracker**, for the change table later.
 
-A missing file or section, or an `unset` value, means stop and point the operator at `/harness:setup-harness`.
+A missing file or section, or an `unset` value, means stop before the ladder: say which value is missing and tell the operator to run `/harness:setup-harness`. `none` is a real answer.
 
 Done when you can say, in one line each: the app and its URL, the records and operations the job needs (list, create, delete), the items (a file, a list), and the **known example**: one existing record the operator points to by URL. Ask for the example if there is none; recon is grounded in it.
 
@@ -40,7 +40,7 @@ In the Harness browser (S10):
 
 - Call `list_pages` first; pages you didn't open belong to someone else and stay untouched.
 - Open the known example with `new_page` and `background: true`, then its list page (where records are listed and paged).
-- On a sign-in screen, stop with a Human step (step 6) to sign the Harness browser in; never type credentials.
+- On a sign-in screen, stop with a Human step (handed over as in step 6) to sign the Harness browser in; never type credentials.
 - `list_network_requests` with `resourceTypes: ["fetch", "xhr"]`, then `get_network_request` on the few calls whose URL or response carries the example's id or name. From each, note:
   - method, URL, query and pagination parameters, request body, response shape;
   - **identifiers**: the record id's format, and any account or workspace id in the path, query or headers;
@@ -66,7 +66,7 @@ Write `scripts/<app>/ENDPOINTS.md` in the target repo (`<app>` is a short lowerc
 
 ## 5. Build the CLI
 
-Copy [cli.sh](cli.sh) to `scripts/<app>/<app>` and make it executable. It is a Bash and curl script, so it runs wherever the repo runs, in any stack, with nothing to install. Edit its `Set from ENDPOINTS.md` block: base URL, the app's origin, the token's variable name (`<APP>_TOKEN`), the auth header, other headers the API checks (an account id, never a secret), and the list, create and delete paths. If the list call is paged, add the paging loop to `list`, keeping to Bash and curl. It already has:
+Copy [cli.sh](cli.sh) to `scripts/<app>/<app>` and make it executable. It is a Bash and curl script, so it runs wherever the repo runs, in any stack, with nothing to install. Edit its `Set from ENDPOINTS.md` block: base URL, the app's origin, the token's variable name (`<APP>_TOKEN`), the auth header, other headers the API checks (an account id, never a secret), and the list, create and delete paths. If the list call is paged, add the paging loop to `list`, keeping to Bash and curl and bash 3.2 (macOS): read each page with `page="$(send GET ...)"` on its own line, never `local page="$(...)"`, which hides a failed request. It already has:
 
 - `list`, `create <items.jsonl>` (one JSON request body per line) and `delete <id>...`;
 - `--dry-run`, which prints every request and stops before reading the token or calling curl; an unknown flag aborts, so a mistyped dry run never writes;
@@ -85,17 +85,17 @@ Done when the dry runs print one request per item with the expected count.
 
 ## 6. Hand over the token
 
-The CLI needs the operator's token, and copying it is a Human step. List every Human step at once, each as:
+The CLI needs the operator's token, and copying it is a Human step. Hand it over with `harness:guided-human-step` (Skill tool), which gives it a deep link and numbered actions, saves it to a status list and re-checks it on "done". Give it:
 
-```
-1. <what the operator does> - <deep link> - then: <the end state you will check>
-```
+- **The step**: copy the token from where `ENDPOINTS.md` says (a link to that page of the app) into `scripts/<app>/.env` as `<APP>_TOKEN=...`, themselves, never in the chat.
+- **End state**: `scripts/<app>/<app> list` returns the known example.
+- **Check**: that `list`, the CLI's listed read under `## Data connectors`.
 
-For the token: copy it from where `ENDPOINTS.md` says (a link to that page of the app), into `scripts/<app>/.env` as `<APP>_TOKEN=...`. The end state: `scripts/<app>/<app> list` returns the known example. They put it in the file themselves, never in the chat. Then stop and wait for "done".
+If it isn't available, list the step yourself as `1. <what the operator does> - <deep link> - then: <the end state you will check>`. Either way, stop and wait for "done".
 
 ## 7. Prove a read
 
-Run `scripts/<app>/<app> list` and find the known example in it with the same fields the app shows (S3). A 401 or 403 means the auth header, Origin or Referer differs from the captured call: compare and fix the CLI before asking the operator for anything. A token that expires mid-run is another Human step.
+On "done", run `scripts/<app>/<app> list` (guided-human-step's re-check does) and find the known example in it with the same fields the app shows (S3). A 401 or 403 means the auth header, Origin or Referer differs from the captured call: compare and fix the CLI before asking the operator for anything. A token that expires mid-run is another Human step.
 
 Done when `list` returns the known example as the app shows it.
 

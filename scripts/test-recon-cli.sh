@@ -77,6 +77,14 @@ run create items.jsonl
 check "no token: a real run stops before any request" $?
 
 setup
+# A paging loop reads each page with $(send ...): a subshell, where bash turns
+# set -e off. The missing token must still stop it.
+perl -0pi -e 's/  send GET "\$LIST_PATH"\n/  local page; page="\$(send GET "\$LIST_PATH")"; echo "\$page"\n/' "$dir/cli/items"
+run list
+[ $code -ne 0 ] && [ ! -e "$dir/calls.log" ] && grep -q 'no token' <<< "$out"
+check "no token: send inside \$(...) still stops before any request" $?
+
+setup
 export EXAMPLE_TOKEN="$TOKEN"
 run create items.jsonl --limit 1
 unset EXAMPLE_TOKEN

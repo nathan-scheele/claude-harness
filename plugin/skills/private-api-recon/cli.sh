@@ -70,7 +70,7 @@ send() {
     return
   fi
   local t h extra=()
-  t="$(token)"
+  t="$(token)" || exit 1 # explicit: inside $(send ...) bash turns set -e off
   for h in ${HEADERS[@]+"${HEADERS[@]}"}; do extra+=(-H "$h"); done
   { fill "$AUTH" token "$t"; echo; } |
     curl -sS --fail-with-body -X "$1" "$BASE$2" -H @- \
