@@ -19,8 +19,11 @@
 # `origin` is github.com/example-org/notes-api rewritten to a local bare repo;
 # .fake-gh/bin/git is a git that works in the eval sandbox (case prompts tell
 # the agent to use it).
+#
+# --no-config: no Project config (docs/agents/harness.md).
 set -euo pipefail
 
+VARIANT="${1:-}"
 FAKE="$(cd "$(dirname "${BASH_SOURCE[0]}")/../fakes" && pwd)/gh"
 [[ -f "$FAKE" ]] || { echo "fixture: shared fake gh not found at $FAKE" >&2; exit 1; }
 
@@ -83,7 +86,7 @@ cat > docs/agents/triage-labels.md <<'MD'
 | `ready-for-human`          | `ready-for-human`    |
 | `wontfix`                  | `wontfix`            |
 MD
-cat > docs/agents/harness.md <<'MD'
+[[ "$VARIANT" == --no-config ]] || cat > docs/agents/harness.md <<'MD'
 # Harness: Project config
 
 ## Code host
@@ -129,16 +132,7 @@ git push -q origin tag-search
 mkdir -p .fake-gh/bin .fake-gh/runs .fake-gh/prs
 cp "$FAKE" .fake-gh/bin/gh
 chmod +x .fake-gh/bin/gh
-# On macOS the eval sandbox blocks the Command Line Tools behind /usr/bin/git,
-# so plain git fails there. .fake-gh/bin/git runs a git that works.
-for g in /opt/homebrew/bin/git /usr/local/bin/git "$(command -v git)"; do
-  if [[ -x "$g" && ! ( "$(uname)" == Darwin && "$g" == /usr/bin/git ) ]]; then
-    printf '#!/bin/sh\nPATH="%s:$PATH" exec "%s" "$@"\n' "$(dirname "$g")" "$g" > .fake-gh/bin/git
-    chmod +x .fake-gh/bin/git
-    break
-  fi
-done
-[[ -x .fake-gh/bin/git ]] || { echo "fixture: no git usable in the eval sandbox (on macOS, install Homebrew git)" >&2; exit 1; }
+bash "$(dirname "${BASH_SOURCE[0]}")/sandbox-git.sh" .fake-gh/bin/git
 : > .fake-gh/calls.log
 printf 'example-org/notes-api\n' > .fake-gh/repo
 
