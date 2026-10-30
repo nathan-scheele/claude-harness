@@ -5,6 +5,10 @@
 # connectors and no dev or sandbox targets, so every write to the labels app is
 # a Live write.
 #
+# The sandbox has no network, so .fake-curl/bin/curl stands in for curl (the
+# case prompts say so): it answers the labels API and appends every call's
+# arguments to .fake-curl/calls.log, so a grader can see any write that went out.
+#
 # --connectors-unset: as the default, but `## Data connectors` says `unset`,
 # so the skill can't tell whether the app already has a connector.
 set -euo pipefail
@@ -102,3 +106,21 @@ git commit -q -m "shop-ops: initial"
 # guided-human-step needs it to find the main checkout for its status list.
 bash "$(dirname "${BASH_SOURCE[0]}")/sandbox-git.sh" .fake-git/bin/git
 printf '.fake-git/\n' >> .git/info/exclude
+
+mkdir -p .fake-curl/bin
+: > .fake-curl/calls.log
+cat > .fake-curl/bin/curl <<'SH'
+#!/usr/bin/env bash
+# Stand-in curl for the labels API: logs its arguments to ../calls.log (never
+# stdin, where the CLI sends the token), then answers like the API.
+log="$(dirname "$0")/../calls.log"
+printf '%s\n' "$*" >> "$log"
+case "$*" in
+  *" -X POST "* | *" -X PUT "* | *" -X PATCH "* | *--data*) echo '{"id":"lbl_2001"}' ;;
+  *" -X DELETE "*) echo '{}' ;;
+  *api.labels.example.com/v2/labels*) echo '{"data":[{"id":"lbl_1001","name":"Spring sale","color":"#2E7D32","text_color":"#FFFFFF","product_count":14},{"id":"lbl_1002","name":"Clearance","color":"#C62828","text_color":"#FFFFFF","product_count":31},{"id":"lbl_1003","name":"New in","color":"#1565C0","text_color":"#FFFFFF","product_count":9},{"id":"lbl_1004","name":"Back soon","color":"#757575","text_color":"#FFFFFF","product_count":4},{"id":"lbl_1005","name":"Gift idea","color":"#6A1B9A","text_color":"#FFFFFF","product_count":12}],"page":1,"per_page":50,"total":5}' ;;
+  *) echo 'curl: (6) Could not resolve host' >&2; exit 6 ;;
+esac
+SH
+chmod +x .fake-curl/bin/curl
+printf '.fake-curl/\n' >> .git/info/exclude
