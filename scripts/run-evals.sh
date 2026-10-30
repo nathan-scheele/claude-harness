@@ -7,7 +7,8 @@
 # allowed_tools. Every run's trace is saved to plugin/evals/results/traces/<case>/<arm>-<n>/
 # (save-eval-traces.sh); re-grade them offline with scripts/check-graders.mjs.
 # The runner's full output goes to plugin/evals/results/run.log; this prints one
-# line per run (scored graders passed) and each failing grader of a with-plugin run.
+# line per run (scored graders passed, DIED when the session never finished) and
+# each failing grader of a with-plugin run.
 # Runs one at a time across the repo's worktrees: a second run waits for the first.
 set -euo pipefail
 
@@ -52,13 +53,27 @@ if [[ ! -f "$OUT/last-run.json" ]]; then
 fi
 "$ROOT/scripts/save-eval-traces.sh" "$OUT/last-run.json" "$OUT/traces" $keep >> "$log"
 
+# A run whose saved trace has no result record died mid-session (API errors or
+# a timeout cut it off): {"<case> <arm>-<n>": "<last API error>"}. Its graders
+# failing says nothing about the skill.
+died="$(for c in $(jq -r '.cases[].name' "$OUT/last-run.json"); do
+  for t in "$OUT/traces/$c"/*/trace.jsonl; do
+    [[ -f "$t" ]] || continue
+    grep -q '"type":"result"' "$t" && continue
+    err="$(grep '"subtype":"api_retry"' "$t" | tail -n 1 | jq -r '"API \(.error_status // "?"): \(.error // "unknown")"' 2>/dev/null)"
+    jq -nc --arg r "$c $(basename "$(dirname "$t")")" --arg e "${err:-no error recorded}" '{($r): $e}'
+  done
+done | jq -sc 'add // {}')"
+
 # One line per run with its scored graders passed, then each failing scored
 # grader of a with-plugin run (the baseline is expected to fail).
-jq -r '.cases[] | .name as $c | .arms | to_entries[] | .key as $arm | .value | to_entries[]
+jq -r --argjson died "$died" '.cases[] | .name as $c | .arms | to_entries[] | .key as $arm | .value | to_entries[]
   | [.value.graders[]? | select(.scored != false)] as $g
-  | "\($c) \($arm)-\(.key + 1): \([$g[] | select(.passed)] | length)/\($g | length)",
-    (if $arm == "with" then $g[] | select(.passed | not)
+  | $died["\($c) \($arm)-\(.key + 1)"] as $d
+  | "\($c) \($arm)-\(.key + 1): \([$g[] | select(.passed)] | length)/\($g | length)\(if $d then " DIED (\($d))" else "" end)",
+    (if $arm == "with" and ($d | not) then $g[] | select(.passed | not)
       | "  FAIL \(.name): \(.explanation // "" | tostring | gsub("\\s+"; " ") | .[0:160])" else empty end)' "$OUT/last-run.json"
+[[ "$died" == "{}" ]] || echo "run-evals: $(jq length <<<"$died") run(s) died before finishing (no result in the trace); rerun the case before reading their graders"
 echo "run-evals: traces in $OUT/traces (re-grade with scripts/check-graders.mjs <case>)"
 [[ $status -eq 0 ]] || exit "$status"
 
