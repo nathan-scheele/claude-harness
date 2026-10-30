@@ -302,6 +302,29 @@ ok_if "names each failing grader of a with-plugin run, on one line" has "  FAIL 
 ok_if "leaves out the baseline's failures" test -z "$(grep -F 'FAIL g1' <<<"$out")"
 ok_if "the runner's output goes to the log, not the screen" test -z "$(grep -F 'RUNNER NOISE' <<<"$out")" -a -n "$(grep -F 'RUNNER NOISE' "$R/plugin/evals/results/run.log")"
 
+echo "# run-evals.sh marks a run whose session died"
+# The with-plugin trace stops on an API retry with no result record; the
+# baseline's ends normally.
+mkdir -p "$WORK/died/with" "$WORK/died/without"
+printf '%s\n' '{"type":"system","subtype":"init"}' \
+  '{"type":"system","subtype":"api_retry","attempt":1,"error_status":529,"error":"overloaded"}' > "$WORK/died/with/trace.jsonl"
+printf '%s\n' '{"type":"system","subtype":"init"}' '{"type":"result","subtype":"success"}' > "$WORK/died/without/trace.jsonl"
+cat > "$WORK/fake-bin/claude" <<SH
+#!/bin/sh
+while [ \$# -gt 0 ]; do [ "\$1" = --json ] && out="\$2"; shift; done
+cat > "\$out" <<'JSON'
+{"aggregates":{"meanDelta":0.5},"cases":[{"name":"x","graders":[],"arms":{
+ "with":[{"tracePath":"$WORK/died/with/trace.jsonl","graders":[{"name":"g1","passed":false,"explanation":"no match"}]}],
+ "without":[{"tracePath":"$WORK/died/without/trace.jsonl","graders":[{"name":"g1","passed":false}]}]}}]}
+JSON
+exit 1
+SH
+out="$(evals)"
+ok_if "a run with no result record is marked DIED with its last API error" has "x with-1: 0/1 DIED (API 529: overloaded)"
+ok_if "a died run's failing graders aren't listed" test -z "$(grep -F 'FAIL g1' <<<"$out")"
+ok_if "a run that finished isn't marked" test -z "$(grep -F 'without-1: 0/1 DIED' <<<"$out")"
+ok_if "says to rerun rather than debug the graders" has "rerun the case"
+
 echo "# check-graders.mjs reads every grader in the repo"
 mkdir -p "$WORK/empty-run/with-1" && printf '{"type":"result","result":""}\n' > "$WORK/empty-run/with-1/trace.jsonl"
 unread=""
