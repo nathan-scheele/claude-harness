@@ -27,7 +27,8 @@
     "./skills/issue-prompts",
     "./skills/guided-human-step",
     "./skills/cross-system-trace",
-    "./skills/audit-and-apply"
+    "./skills/audit-and-apply",
+    "./skills/stakeholder-message"
   ],
   "agents": [
     "./agents/live-verifier.md",

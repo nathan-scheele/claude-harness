@@ -227,7 +227,7 @@ case "$in" in
   *GREETCHECK*) grep -q 'Hi THERE' <<<"$in" && echo "PASS: greets" || echo "FAIL: no greeting" ;;
   *TRACECHECK*) grep -q 'set-status' <<<"$in" && echo "PASS" || echo "FAIL" ;;
   *SPLITCHECK*) n=$(( $(cat "$dir/split-count" 2>/dev/null || echo 0) + 1 )); echo "$n" > "$dir/split-count"
-                [ $((n % 3)) -eq 1 ] && echo "PASS" || echo "FAIL. The vote $n split." ;;
+                [ $((n % 3)) -eq 1 ] && echo "PASS" || echo "FAIL" ;;
   *) echo "I am not sure." ;;
 esac
 SH
@@ -240,9 +240,9 @@ ok_if "--llm: focus trace shows the judge the trace" test "$(row judge-trace)" =
 ok_if "--llm: three votes, majority wins, a split shows the count" test "$(row judge-split)" = "FAIL(1/3) FAIL(1/3)"
 ok_if "--llm: a judge with no verdict is a skip, not a pass" test "$(row judge-garbled)" = "skip skip"
 ok_if "--llm: the judge sees the grader's conditions" grep -qF 'PASS if the message greets the operator.' "$WORK/judge-input.log"
+ok_if "--llm: a failed cell says why, in the judge's words" has "why judge without-1: no greeting"
+ok_if "--llm: a passing cell gives no reason" test -z "$(grep -F 'why judge with-1' <<<"$out")"
 ok_if "--llm: still skips file_exists" test "$(row exists)" = "skip skip"
-ok_if "--llm: lists the judge's reason for each FAIL vote on a with-plugin run" has "judge-split with-1: The vote 2 split."
-ok_if "--llm: leaves out the baseline's FAIL reasons" test -z "$(grep -F 'no greeting' <<<"$out")"
 
 out="$(node "$HERE/check-graders.mjs" "$CASE" "$WORK/no-such-dir" 2>&1)"
 code=$?

@@ -1,0 +1,17 @@
+schema_version: "1.1"
+name: stakeholder-message-edit
+description: >
+  An edit to an earlier Slack draft ("tighter, drop the dry-run detail, then
+  send it"). Since that draft, issue 12 gained a comment: the backfill has run.
+  The agent re-reads the issue, reworks the draft from the latest state (the
+  backfill is done, only the re-send decision is still open), applies the edit
+  and replies with just the reworked draft in plain text, without re-explaining
+  the background. The team chat CLI (a fake that logs every call) is never called.
+tags: [stakeholder-message]
+runs: 3
+execution:
+  max_turns: 30
+  timeout_seconds: 600
+  allowed_tools: [Read, Glob, Grep, Skill, Bash, Write, Edit]
+context:
+  scaffold_script: fixture-repo.sh
