@@ -402,6 +402,23 @@ fake "$d" pr merge 13 --squash
 ok_if "merging an unknown PR exits non-zero" test "$code" -ne 0
 fake "$d" pr merge 12
 ok_if "pr merge without a method exits non-zero" test "$code" -ne 0
+rm -rf "$d"
+
+# --match-head-commit, on a canned PR whose head is known.
+d="$(new_ship_scenario)"
+printf '{"number": 20, "title": "Pin", "body": "", "state": "OPEN", "headRefName": "add-note-tags", "headRefOid": "%s", "baseRefName": "main"}\n' \
+  2222222222222222222222222222222222222222 > "$d/prs/20.json"
+fake "$d" pr merge 20 --squash --match-head-commit 2222222
+ok_if "--match-head-commit refuses a short SHA, as GitHub does" test "$code" -ne 0 -a -n "$(grep -F 'Could not coerce value "2222222" to GitObjectID' <<<"$out")"
+fake "$d" pr merge 20 --squash --match-head-commit 4444444444444444444444444444444444444444
+ok_if "--match-head-commit refuses a head that moved" test "$code" -ne 0 -a -n "$(grep -F 'Head branch was modified' <<<"$out")"
+fake "$d" pr view 20 --json state --jq .state
+ok_if "a refused merge leaves the PR open" test "$out" = "OPEN"
+fake "$d" pr merge 20 --squash --match-head-commit 2222222222222222222222222222222222222222
+ok_if "--match-head-commit merges when the head matches" test "$code" -eq 0 -a -n "$(grep -F 'Squashed and merged pull request #20' <<<"$out")"
+rm -rf "$d"
+
+d="$(new_ship_scenario)"
 fake "$d" workflow list --json name,path,state --jq '.[] | "\(.name) \(.path) \(.state)"'
 ok_if "workflow list names the scenario's workflows" test "$out" = "CI .github/workflows/ci.yml active"
 rm -rf "$d"
