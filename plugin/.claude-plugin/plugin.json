@@ -29,7 +29,8 @@
     "./skills/cross-system-trace",
     "./skills/audit-and-apply",
     "./skills/stakeholder-message",
-    "./skills/followup-capture"
+    "./skills/followup-capture",
+    "./skills/private-api-recon"
   ],
   "agents": [
     "./agents/live-verifier.md",

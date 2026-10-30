@@ -24,12 +24,13 @@ Commands that must pass before a PR is opened, run from the repo root in this or
 - `scripts/test-setup-detect.sh`
 - `scripts/test-fake-gh.sh`
 - `scripts/test-eval-tools.sh`
+- `scripts/test-recon-cli.sh`
 
 ## CI
 
 Workflows and their job ids, as named in the workflow files.
 
-- `ci.yml` (CI): `validate`, `leak-check`, `release-check`, `guard`, `setup-detect`, `fake-gh`, `eval-tools`
+- `ci.yml` (CI): `validate`, `leak-check`, `release-check`, `guard`, `setup-detect`, `fake-gh`, `recon-cli`, `eval-tools`
 
 ## Merge
 
