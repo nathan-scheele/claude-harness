@@ -402,7 +402,7 @@ cmd_pr_edit() {
 cmd_pr_merge() {
   parse "R/repo= s/squash m/merge r/rebase d/delete-branch -/auto -/admin t/subject= b/body= F/body-file= -/match-head-commit=" "$@"
   reject auto
-  local p method head sha n issue verb
+  local p method head sha oid n issue verb
   method=""
   for n in squash merge rebase; do
     if has_opt "$n"; then
@@ -417,6 +417,15 @@ cmd_pr_merge() {
     MERGED) die "Pull request #$n was already merged" ;;
     CLOSED) die "Pull request #$n is closed" ;;
   esac
+  # --match-head-commit: GitHub takes only a full 40-character SHA, and refuses
+  # the merge when the PR's head has moved (a PR with no known head is let by).
+  if has_opt match-head-commit; then
+    sha="$(opt match-head-commit)"
+    printf '%s' "$sha" | grep -Eq '^[0-9a-f]{40}$' \
+      || die "GraphQL: Variable \$input of type MergePullRequestInput! was provided invalid value for expectedHeadOid (Could not coerce value \"$sha\" to GitObjectID)"
+    oid="$(jq -r '.headRefOid // ""' <<<"$p")"
+    [ -z "$oid" ] || [ "$oid" = "$sha" ] || die "GraphQL: Head branch was modified. Review and try the merge again. (mergePullRequest)"
+  fi
   head="$(jq -r .headRefName <<<"$p")"
   sha="$(merge_sha "$head")"
   [ -n "$sha" ] || sha="$(printf '%040d' "$n")"
