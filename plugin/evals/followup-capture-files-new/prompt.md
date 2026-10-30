@@ -1,0 +1,1 @@
+While checking PR #12 I noticed that saving a note through PUT /notes/:id keeps tags exactly as typed, so " Work " gets stored with its spaces and capital. updateNoteTags in lib/notes-store.js writes the tags without calling normalizeTags. File it.

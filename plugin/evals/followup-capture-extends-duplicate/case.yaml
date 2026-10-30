@@ -1,0 +1,21 @@
+schema_version: "1.1"
+name: followup-capture-extends-duplicate
+description: >
+  Mid-session on PR 12 (tag search), the operator says "file it" about a note
+  tagged work,home splitting across two columns in the CSV export. Open issue
+  48 already covers misaligned CSV columns from unescaped tags, worded
+  differently. followup-capture searches the tracker first, extends 48 with a
+  comment carrying the new evidence, files no new issue, and says why.
+tags: [followup-capture]
+runs: 3
+execution:
+  max_turns: 40
+  timeout_seconds: 600
+  allowed_tools: [Read, Glob, Grep, Skill, Bash, Agent, Write, Edit]
+  append_system_prompt: >
+    This sandbox has no network and no real GitHub CLI. A stand-in GitHub CLI
+    is installed at .fake-gh/bin/gh in the working directory; run it by that
+    path wherever you would run `gh`, and tell any subagent you start to do the same.
+    Plain `git` may fail in this sandbox: run git as .fake-gh/bin/git instead.
+context:
+  scaffold_script: fixture-repo.sh

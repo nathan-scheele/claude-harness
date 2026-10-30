@@ -161,6 +161,21 @@ fake "$d" issue create --body "no title"
 ok_if "issue create without a title exits non-zero" test "$code" -ne 0
 rm -rf "$d"
 
+d="$(new_scenario)"
+fake "$d" issue create --title "Tags lose case" --body "x" --label needs-triage -l "tags-v2,bug"
+fake "$d" issue list --json number,labels --jq '.[0].labels | map(.name) | join(" ")'
+ok_if "issue create records repeated and comma-separated labels" test "$out" = "needs-triage tags-v2 bug"
+fake "$d" issue list --label needs-triage --json title --jq '.[].title'
+ok_if "issue list --label finds a created issue" test "$out" = "Tags lose case"
+printf '## Parent\n\n#30\n' > "$d/body.md"
+fake "$d" issue create --title "From a file" --body-file "$d/body.md"
+fake "$d" issue view "$(basename "$out")" --json body --jq .body
+ok_if "issue create --body-file stores the file's text" test "$out" = "$(printf '## Parent\n\n#30')"
+fake "$d" issue create --title "From stdin" --body-file - <<<"Found while working on #7"
+fake "$d" issue view "$(basename "$out")" --json body --jq .body
+ok_if "issue create --body-file - reads stdin" test "$out" = "Found while working on #7"
+rm -rf "$d"
+
 # --- issue list filters ---
 
 # new_issue_scenario: open and closed issues with labels, one with a native
@@ -295,6 +310,23 @@ fake "$d" pr view 7 --json number,headRefName --jq '.headRefName'
 ok_if "canned PRs still view by number" test "$out" = "add-note-tags"
 fake "$d" pr list --json number --jq '.[].number'
 ok_if "pr list includes canned PRs" test "$out" = "7"
+rm -rf "$d"
+
+# --- commenting on a PR ---
+
+d="$(new_scenario)"
+fake "$d" pr comment 7 --body "Follow-up: #101"
+ok_if "pr comment prints the comment URL" has "https://github.com/example-org/notes-api/pull/7#issuecomment-"
+ok_if "pr comment is logged" logged "$d" "gh pr comment 7 --body Follow-up: #101"
+fake "$d" pr comment 7 --body-file - <<<"Also: #102"
+fake "$d" pr view 7 --json comments --jq '[.comments[].body] | join(" | ")'
+ok_if "pr view --json comments shows comments in order" test "$out" = "Follow-up: #101 | Also: #102"
+fake "$d" issue list --state all --json number,comments --jq '[.[].comments[]] | length'
+ok_if "a PR comment is not an issue comment" test "$out" = "0"
+fake "$d" pr comment 99 --body "x"
+ok_if "commenting on an unknown PR exits non-zero" test "$code" -ne 0
+fake "$d" pr comment 7
+ok_if "pr comment without a body exits non-zero" test "$code" -ne 0
 rm -rf "$d"
 
 # --- runs that wait for a PR to open or merge ---
